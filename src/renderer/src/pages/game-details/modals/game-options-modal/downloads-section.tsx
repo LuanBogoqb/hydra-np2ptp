@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@renderer/components";
-import { useToast } from "@renderer/hooks";
+import { useLibrary, useToast } from "@renderer/hooks";
 import type { LibraryGame } from "@types";
 
 interface DownloadsSettingsSectionProps {
@@ -24,6 +24,7 @@ export function DownloadsSettingsSection({
 }: Readonly<DownloadsSettingsSectionProps>) {
   const { t } = useTranslation("game_details");
   const { showSuccessToast, showErrorToast } = useToast();
+  const { updateLibrary } = useLibrary();
   const [converting, setConverting] = useState(false);
   const [np2ptpUri, setNp2ptpUri] = useState(game.download?.np2ptpUri ?? null);
 
@@ -35,6 +36,7 @@ export function DownloadsSettingsSection({
         game.objectId
       );
       setNp2ptpUri(result.uri);
+      updateLibrary();
       showSuccessToast(
         t("np2ptp_convert_success"),
         result.verified ? undefined : t("np2ptp_convert_unverified")

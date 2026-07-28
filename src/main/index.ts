@@ -325,7 +325,9 @@ app.on("before-quit", async (e) => {
     PowerSaveBlockerManager.reset();
     /* Disconnects Python RPC */
     PythonRPC.kill();
-    np2ptp.shutdown().catch(() => {});
+    // Awaited: a fire-and-forget shutdown leaves an orphan daemon holding the
+    // store lock, which blocks the next launch's spawn.
+    await np2ptp.shutdown().catch(() => {});
     await clearGamesPlaytime();
     canAppBeClosed = true;
     app.quit();

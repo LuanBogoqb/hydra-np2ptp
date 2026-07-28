@@ -22,7 +22,13 @@ export function isNp2ptpAvailable(): boolean {
  * Called once after boot and again after every daemon restart.
  */
 export async function reprovideAllFromDb(): Promise<void> {
-  const downloads = await downloadsSublevel.values().all();
+  let downloads;
+  try {
+    downloads = await downloadsSublevel.values().all();
+  } catch (err) {
+    logger.warn?.("np2ptp re-provide: could not read downloads", err);
+    return;
+  }
   for (const download of downloads) {
     if (!download.np2ptpSeed || !download.nptpPath) continue;
     try {
@@ -50,6 +56,9 @@ export const np2ptp = new Np2ptpDaemon({
   onWarn: (message) => {
     logger.warn?.("np2ptp daemon warn", message);
     WindowManager.sendToAppWindows?.("on-np2ptp-warn", message);
+  },
+  onStderr: (chunk) => {
+    logger.warn?.("np2ptp stderr", chunk.trimEnd());
   },
   onCrash: (attempts) => {
     logger.error?.(`np2ptp daemon gave up after ${attempts} restarts`);

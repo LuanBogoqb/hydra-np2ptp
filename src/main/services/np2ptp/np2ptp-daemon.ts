@@ -47,6 +47,7 @@ interface PendingRequest {
 export interface Np2ptpDaemonOptions {
   spawnFn: () => DaemonProcessLike;
   onWarn?: (message: string) => void;
+  onStderr?: (chunk: string) => void;
   onCrash?: (attempts: number) => void;
   onRestart?: () => Promise<void>;
   readyTimeoutMs?: number;
@@ -64,6 +65,7 @@ export class Np2ptpDaemon {
   private readyResolve: ((r: Np2ptpReadyEvent) => void) | null = null;
   private readyReject: ((e: Error) => void) | null = null;
   private readyTimer: NodeJS.Timeout | null = null;
+  private respawnTimer: NodeJS.Timeout | null = null;
   private attempts = 0;
   private intentionalExit = false;
   private everReady = false;
@@ -75,6 +77,8 @@ export class Np2ptpDaemon {
   }
 
   public ensureReady(): Promise<Np2ptpReadyEvent> {
+    // A pending backoff respawn already owns a readyPromise — await it rather
+    // than spawning a second daemon onto the same store.
     if (!this.readyPromise) {
       this.createReadyPromise();
       this.spawn();
@@ -86,10 +90,12 @@ export class Np2ptpDaemon {
     this.readyPromise = new Promise<Np2ptpReadyEvent>((resolve, reject) => {
       this.readyResolve = resolve;
       this.readyReject = reject;
-      this.readyTimer = setTimeout(
-        () => reject(new Error("np2ptp daemon startup timeout")),
-        this.options.readyTimeoutMs ?? 10_000
-      );
+      this.readyTimer = setTimeout(() => {
+        reject(new Error("np2ptp daemon startup timeout"));
+        // Kill the stuck process; its exit handler re-enters the backoff
+        // ladder and replaces this readyPromise with a fresh one.
+        this.proc?.kill();
+      }, this.options.readyTimeoutMs ?? 10_000);
       this.readyTimer.unref?.();
     });
     // Internal respawns have no external awaiter; keep a handler attached so a
@@ -99,15 +105,32 @@ export class Np2ptpDaemon {
 
   private spawn() {
     this.accumulator = new NdjsonAccumulator();
-    this.proc = this.options.spawnFn();
-    this.proc.stdout?.on("data", (chunk: Buffer) => {
+
+    let proc: DaemonProcessLike;
+    try {
+      proc = this.options.spawnFn();
+    } catch (err) {
+      this.proc = null;
+      const error = err instanceof Error ? err : new Error(String(err));
+      if (this.readyTimer) clearTimeout(this.readyTimer);
+      this.readyReject?.(error);
+      this.readyPromise = null;
+      return;
+    }
+
+    this.proc = proc;
+    proc.stdout?.on("data", (chunk: Buffer) => {
+      if (this.proc !== proc) return;
       for (const event of this.accumulator.push(chunk)) {
         this.handleEvent(event);
       }
     });
-    const onGone = () => this.handleExit();
-    this.proc.once("exit", onGone);
-    this.proc.once("error", onGone);
+    proc.stderr?.on("data", (chunk: Buffer) => {
+      this.options.onStderr?.(chunk.toString());
+    });
+    const onGone = () => this.handleExit(proc);
+    proc.once("exit", onGone);
+    proc.once("error", onGone);
   }
 
   private handleEvent(event: Np2ptpEvent) {
@@ -117,8 +140,8 @@ export class Np2ptpDaemon {
       this.everReady = true;
       this.attempts = 0;
       this.readyResolve?.(event);
-      if (wasRespawn) {
-        void this.options.onRestart?.();
+      if (wasRespawn && this.options.onRestart) {
+        void this.options.onRestart().catch(() => {});
       }
       return;
     }
@@ -141,9 +164,13 @@ export class Np2ptpDaemon {
     }
   }
 
-  private handleExit() {
-    if (!this.proc) return;
+  private handleExit(proc: DaemonProcessLike | null) {
+    // A killed process emits its real "exit" after killAndRestart has already
+    // moved on to a fresh daemon — ignore events from anything but the
+    // current process so they cannot tear the replacement down.
+    if (!proc || this.proc !== proc) return;
     this.proc = null;
+
     const error = new Error("np2ptp daemon exited");
     for (const entry of this.pending.values()) {
       if (entry.timer) clearTimeout(entry.timer);
@@ -162,18 +189,18 @@ export class Np2ptpDaemon {
     if (this.attempts < this.backoffDelays.length) {
       const delay = this.backoffDelays[this.attempts];
       this.attempts += 1;
-      const timer = setTimeout(() => this.respawn(), delay);
-      timer.unref?.();
+      // The new readyPromise exists NOW so ensureReady/request during the
+      // backoff window await it instead of spawning a competing daemon.
+      this.createReadyPromise();
+      this.respawnTimer = setTimeout(() => {
+        this.respawnTimer = null;
+        this.spawn();
+      }, delay);
+      this.respawnTimer.unref?.();
     } else {
       this.options.onCrash?.(this.attempts);
       this.attempts = 0;
     }
-  }
-
-  private respawn(): Promise<Np2ptpReadyEvent> {
-    this.createReadyPromise();
-    this.spawn();
-    return this.readyPromise!;
   }
 
   public async request(
@@ -186,6 +213,10 @@ export class Np2ptpDaemon {
     await this.ensureReady();
     const id = this.nextId++;
     return new Promise<Np2ptpResultEvent>((resolve, reject) => {
+      if (!this.proc?.stdin) {
+        reject(new Error("np2ptp daemon exited"));
+        return;
+      }
       const entry: PendingRequest = {
         resolve,
         reject,
@@ -199,21 +230,34 @@ export class Np2ptpDaemon {
         entry.timer.unref?.();
       }
       this.pending.set(id, entry);
-      this.proc?.stdin?.write(JSON.stringify({ id, ...cmd }) + "\n");
+      this.proc.stdin.write(JSON.stringify({ id, ...cmd }) + "\n");
     });
   }
 
   public async killAndRestart(): Promise<void> {
+    if (this.respawnTimer) {
+      clearTimeout(this.respawnTimer);
+      this.respawnTimer = null;
+    }
+    const proc = this.proc;
     this.intentionalExit = true;
-    this.proc?.kill();
-    // FakeProc/real ChildProcess emit "exit" synchronously or async; ensure state
-    // is cleared even if the event has not fired yet (mirrors PythonRPC.kill).
-    this.handleExit();
-    await this.respawn();
+    proc?.kill();
+    // FakeProc/real ChildProcess may emit "exit" synchronously or later; run
+    // the cleanup now either way (identity check makes a second run a no-op).
+    this.handleExit(proc);
+    this.intentionalExit = false;
+    this.createReadyPromise();
+    this.spawn();
+    await this.readyPromise;
   }
 
   public async shutdown(): Promise<void> {
     this.intentionalExit = true;
+    if (this.respawnTimer) {
+      clearTimeout(this.respawnTimer);
+      this.respawnTimer = null;
+    }
+    if (!this.proc) return;
     try {
       await this.request({ cmd: "shutdown" }, { timeoutMs: 3000 });
     } catch {

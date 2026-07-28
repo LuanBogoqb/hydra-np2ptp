@@ -21,7 +21,10 @@ const deleteGameFolder = async (
   // the daemon never answers peers with reads from a vanishing folder.
   if (download.np2ptpUri) {
     await np2ptp
-      .request({ cmd: "unprovide", root: download.np2ptpUri })
+      .request(
+        { cmd: "unprovide", root: download.np2ptpUri },
+        { timeoutMs: 5000 }
+      )
       .catch((err) =>
         logger.warn("np2ptp unprovide before delete failed", err)
       );

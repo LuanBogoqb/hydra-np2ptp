@@ -12,7 +12,7 @@ import {
   RootzApi,
 } from "../hosters";
 import { PythonRPC } from "../python-rpc";
-import { np2ptp } from "../np2ptp";
+import { np2ptp, np2ptpStorePath } from "../np2ptp";
 import type { Np2ptpResultEvent } from "@types";
 import {
   LibtorrentPayload,
@@ -640,7 +640,9 @@ export class DownloadManager {
         command ?? {
           cmd: "fetch",
           uri: download.uri,
-          out: download.downloadPath,
+          out: download.folderName
+            ? path.join(download.downloadPath, download.folderName)
+            : download.downloadPath,
         },
         {
           onProgress: (event) => {
@@ -685,16 +687,24 @@ export class DownloadManager {
         typeof state.result.bytes_total === "number"
           ? state.result.bytes_total
           : (download.fileSize ?? 0);
+      const root =
+        typeof state.result.root === "string" ? state.result.root : null;
       const updated: Download = {
         ...download,
         progress: 1,
         bytesDownloaded: bytesTotal,
         fileSize: bytesTotal || download.fileSize,
         status: "active",
-        np2ptpUri:
-          typeof state.result.root === "string"
-            ? state.result.root
-            : download.np2ptpUri,
+        np2ptpUri: root ?? download.np2ptpUri,
+        // fetch/torrent results are already bridged; the manifest sits in the
+        // daemon store, which is what provide (seeding) needs later.
+        nptpPath: root
+          ? path.join(
+              np2ptpStorePath(),
+              "manifests",
+              `${root.replace(/^np2ptp:/, "")}.nptp`
+            )
+          : download.nptpPath,
       };
       await downloadsSublevel.put(downloadId, updated);
 
@@ -887,7 +897,10 @@ export class DownloadManager {
     if (
       userPreferences?.np2ptpAutoConvert &&
       download.downloader !== Downloader.Np2ptp &&
-      !download.np2ptpUri
+      !download.np2ptpUri &&
+      // Extraction rewrites the folder while conversion would be hashing it;
+      // auto-convert only applies to downloads that stay as they landed.
+      !download.automaticallyExtract
     ) {
       // Deferred import to dodge a module cycle (events -> services -> events)
       void import("../../events/library/convert-game-to-np2ptp")
@@ -1101,6 +1114,8 @@ export class DownloadManager {
     this.usingJsDownloader = false;
     this.jsDownloader = null;
     this.allDebridBatch = null;
+    this.usingNp2ptp = false;
+    this.np2ptpProgressState = null;
     WindowManager.mainWindow?.setProgressBar(-1);
     WindowManager.sendToAppWindows("on-download-progress", null);
 
@@ -1967,7 +1982,22 @@ export class DownloadManager {
 
     if (download.downloader === Downloader.Np2ptp) {
       logger.log("[DownloadManager] Using np2ptp downloader");
-      this.startNp2ptpDownload(download, downloadId);
+
+      // Fetches land in their own folder — everything downstream (extraction,
+      // deletion, conversion) assumes a per-game folderName.
+      const folderName = download.folderName ?? download.objectId;
+      if (!download.folderName) {
+        await downloadsSublevel.put(downloadId, { ...download, folderName });
+      }
+
+      if (this.startGeneration !== myGeneration) {
+        logger.log(
+          "[DownloadManager] Download was superseded during preparation; aborting start"
+        );
+        return;
+      }
+
+      this.startNp2ptpDownload({ ...download, folderName }, downloadId);
       return;
     }
 
@@ -1983,6 +2013,12 @@ export class DownloadManager {
       // Selective file downloads stay on libtorrent — the daemon's torrent
       // command downloads whole torrents only.
       if (userPreferences?.useNp2ptpForTorrents) {
+        if (this.startGeneration !== myGeneration) {
+          logger.log(
+            "[DownloadManager] Download was superseded during preparation; aborting start"
+          );
+          return;
+        }
         logger.log(
           "[DownloadManager] Routing torrent through np2ptp (engine toggle)"
         );

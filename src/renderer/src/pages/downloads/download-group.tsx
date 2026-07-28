@@ -17,6 +17,7 @@ import {
   useDownload,
   useLibrary,
   useDate,
+  useToast,
 } from "@renderer/hooks";
 
 import "./download-group.scss";
@@ -555,6 +556,7 @@ export function DownloadGroup({
 }: Readonly<DownloadGroupProps>) {
   const { t } = useTranslation("downloads");
   const { t: tGameDetails } = useTranslation("game_details");
+  const { showErrorToast } = useToast();
   const navigate = useNavigate();
 
   const userPreferences = useAppSelector(
@@ -855,7 +857,10 @@ export function DownloadGroup({
           onClick: () => {
             window.electron
               .toggleNp2ptpSeed(game.shop, game.objectId, false)
-              .then(() => updateLibrary());
+              .then(() => updateLibrary())
+              .catch((err) =>
+                showErrorToast(err instanceof Error ? err.message : String(err))
+              );
           },
         },
         {
@@ -868,7 +873,10 @@ export function DownloadGroup({
           onClick: () => {
             window.electron
               .toggleNp2ptpSeed(game.shop, game.objectId, true)
-              .then(() => updateLibrary());
+              .then(() => updateLibrary())
+              .catch((err) =>
+                showErrorToast(err instanceof Error ? err.message : String(err))
+              );
           },
         },
         {
