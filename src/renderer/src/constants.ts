@@ -14,6 +14,7 @@ export const DOWNLOADER_NAME = {
   [Downloader.Rootz]: "Rootz",
   [Downloader.Premiumize]: "Premiumize",
   [Downloader.AllDebrid]: "AllDebrid",
+  [Downloader.Np2ptp]: "NP2PTP",
 };
 
 export const MAX_MINUTES_TO_SHOW_IN_PLAYTIME = 120;

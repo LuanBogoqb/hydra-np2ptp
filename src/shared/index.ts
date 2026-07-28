@@ -132,6 +132,8 @@ export const formatName = pipe<string>(
 const realDebridHosts = ["https://1fichier.com", "https://mediafire.com"];
 
 export const getDownloadersForUri = (uri: string) => {
+  if (uri.startsWith("np2ptp:")) return [Downloader.Np2ptp];
+
   if (uri.startsWith("https://gofile.io")) return [Downloader.Gofile];
 
   if (uri.startsWith("https://pixeldrain.com")) return [Downloader.PixelDrain];
