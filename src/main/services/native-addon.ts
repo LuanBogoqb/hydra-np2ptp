@@ -289,7 +289,10 @@ export class NativeAddon {
     try {
       return this.load().verifyMinisign(content, signatureText, publicKeyB64);
     } catch (error) {
-      logger.error("Failed to verify minisign signature via native addon", error);
+      logger.error(
+        "Failed to verify minisign signature via native addon",
+        error
+      );
       return false;
     }
   }

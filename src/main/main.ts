@@ -200,7 +200,10 @@ export const loadState = async () => {
       );
     }
   } catch (err) {
-    logger.error("Python RPC bootstrap failed; torrent engine unavailable", err);
+    logger.error(
+      "Python RPC bootstrap failed; torrent engine unavailable",
+      err
+    );
   }
 
   WindowManager.sendDownloadsUpdated();
