@@ -118,7 +118,7 @@ references, cross-volume is fine. Nothing is duplicated.
 
 **No-copy invariant** (files must stay in place, unchanged):
 
-1. Uninstall via Hydra → fork `unprovide`s and clears refs *before* deleting.
+1. Uninstall via Hydra → fork `unprovide`s and clears refs _before_ deleting.
 2. Moved/deleted outside Hydra → daemon fails the chunk read, answers "chunk
    unavailable" to the peer (never crashes), emits `warn`; Hydra marks the
    game "conversion broken — reconvert".

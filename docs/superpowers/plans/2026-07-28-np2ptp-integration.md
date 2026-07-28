@@ -45,11 +45,13 @@ UI: renderer constants, downloads-section (convert), download-group (seed menu),
 ### Task 1: Protocol types + NDJSON parser
 
 **Files:**
+
 - Create: `src/types/np2ptp.types.ts`
 - Create: `src/main/services/np2ptp/ndjson.ts`
 - Test: `src/main/services/np2ptp/ndjson.test.ts`
 
 **Interfaces:**
+
 - Produces: `Np2ptpEvent` union type; `class NdjsonAccumulator { push(chunk: Buffer | string): Np2ptpEvent[] }` — feeds raw stdout chunks, returns fully-parsed events; malformed lines are skipped (returned as `{event:"warn", message:"unparseable line: ..."}` so nothing throws).
 
 - [ ] **Step 1: Write the failing test**
@@ -63,7 +65,9 @@ import { NdjsonAccumulator } from "./ndjson";
 describe("NdjsonAccumulator", () => {
   it("parses one complete line", () => {
     const acc = new NdjsonAccumulator();
-    const events = acc.push('{"event":"ready","version":"0.1.9","peer_id":"12D3","addrs":["/ip4/1.2.3.4/tcp/1"]}\n');
+    const events = acc.push(
+      '{"event":"ready","version":"0.1.9","peer_id":"12D3","addrs":["/ip4/1.2.3.4/tcp/1"]}\n'
+    );
     assert.equal(events.length, 1);
     assert.equal(events[0].event, "ready");
   });
@@ -73,12 +77,20 @@ describe("NdjsonAccumulator", () => {
     assert.equal(acc.push('{"id":1,"event":"prog').length, 0);
     const events = acc.push('ress","op":"fetch","done":5,"total":10}\n');
     assert.equal(events.length, 1);
-    assert.deepEqual(events[0], { id: 1, event: "progress", op: "fetch", done: 5, total: 10 });
+    assert.deepEqual(events[0], {
+      id: 1,
+      event: "progress",
+      op: "fetch",
+      done: 5,
+      total: 10,
+    });
   });
 
   it("handles multiple lines in one chunk", () => {
     const acc = new NdjsonAccumulator();
-    const events = acc.push('{"id":1,"event":"result","ok":true,"root":"np2ptp:ab"}\n{"id":2,"event":"error","ok":false,"message":"boom"}\n');
+    const events = acc.push(
+      '{"id":1,"event":"result","ok":true,"root":"np2ptp:ab"}\n{"id":2,"event":"error","ok":false,"message":"boom"}\n'
+    );
     assert.equal(events.length, 2);
     assert.equal(events[1].event, "error");
   });
@@ -148,7 +160,11 @@ export interface Np2ptpStatusResult {
   peer_id: string;
   addrs: string[];
   provided: string[];
-  ledger: { served_to_us: number; we_served: number; credited_by_receipts: number };
+  ledger: {
+    served_to_us: number;
+    we_served: number;
+    credited_by_receipts: number;
+  };
 }
 ```
 
@@ -197,14 +213,17 @@ git commit -m "feat: np2ptp NDJSON protocol types and line parser"
 ### Task 2: Np2ptpDaemon — spawn, ready handshake, request correlation
 
 **Files:**
+
 - Create: `src/main/services/np2ptp/np2ptp-daemon.ts`
 - Test: `src/main/services/np2ptp/np2ptp-daemon.test.ts`
 
 **Interfaces:**
+
 - Consumes: `NdjsonAccumulator`, `Np2ptpEvent` (Task 1).
 - Produces:
   ```ts
-  interface DaemonProcessLike {  // subset of ChildProcess, for tests
+  interface DaemonProcessLike {
+    // subset of ChildProcess, for tests
     stdin: { write(s: string): boolean } | null;
     stdout: NodeJS.EventEmitter | null;
     stderr: NodeJS.EventEmitter | null;
@@ -213,16 +232,22 @@ git commit -m "feat: np2ptp NDJSON protocol types and line parser"
   }
   class Np2ptpDaemon {
     constructor(opts: {
-      spawnFn: () => DaemonProcessLike;      // injected for tests; prod wraps cp.spawn
+      spawnFn: () => DaemonProcessLike; // injected for tests; prod wraps cp.spawn
       onWarn?: (message: string) => void;
-      onCrash?: (attempts: number) => void;  // fired when restarts are exhausted
-      onRestart?: () => Promise<void>;       // re-provide hook, awaited after ready
-      readyTimeoutMs?: number;               // default 10000
+      onCrash?: (attempts: number) => void; // fired when restarts are exhausted
+      onRestart?: () => Promise<void>; // re-provide hook, awaited after ready
+      readyTimeoutMs?: number; // default 10000
     });
     ensureReady(): Promise<Np2ptpReadyEvent>;
-    request(cmd: object, opts?: { timeoutMs?: number; onProgress?: (e: Np2ptpProgressEvent) => void }): Promise<Np2ptpResultEvent>;
-    killAndRestart(): Promise<void>;         // abort path for in-flight ops
-    shutdown(): Promise<void>;               // sends {"cmd":"shutdown"}, then kill after grace
+    request(
+      cmd: object,
+      opts?: {
+        timeoutMs?: number;
+        onProgress?: (e: Np2ptpProgressEvent) => void;
+      }
+    ): Promise<Np2ptpResultEvent>;
+    killAndRestart(): Promise<void>; // abort path for in-flight ops
+    shutdown(): Promise<void>; // sends {"cmd":"shutdown"}, then kill after grace
   }
   ```
 - `request` auto-assigns `id` (monotonic counter), writes `JSON.stringify({id, ...cmd}) + "\n"`, resolves on matching `result`, rejects on matching `error` or process exit.
@@ -255,7 +280,12 @@ class FakeProc extends EventEmitter {
   }
 }
 
-const READY = { event: "ready", version: "0.1.9", peer_id: "12D3", addrs: ["/ip4/127.0.0.1/tcp/4001"] };
+const READY = {
+  event: "ready",
+  version: "0.1.9",
+  peer_id: "12D3",
+  addrs: ["/ip4/127.0.0.1/tcp/4001"],
+};
 
 describe("Np2ptpDaemon", () => {
   it("resolves ensureReady on ready event", async () => {
@@ -296,8 +326,21 @@ describe("Np2ptpDaemon", () => {
     );
     const id = JSON.parse(proc.written[0]).id;
     proc.emitLine({ id, event: "progress", op: "fetch", done: 1, total: 4 });
-    proc.emitLine({ id: 999, event: "progress", op: "fetch", done: 99, total: 100 });
-    proc.emitLine({ id, event: "result", ok: true, root: "np2ptp:ab", path: "D:/g", bytes_total: 4 });
+    proc.emitLine({
+      id: 999,
+      event: "progress",
+      op: "fetch",
+      done: 99,
+      total: 100,
+    });
+    proc.emitLine({
+      id,
+      event: "result",
+      ok: true,
+      root: "np2ptp:ab",
+      path: "D:/g",
+      bytes_total: 4,
+    });
     await p;
     assert.deepEqual(seen, [1]);
   });
@@ -439,7 +482,10 @@ export class Np2ptpDaemon {
 
   public async request(
     cmd: object,
-    opts: { timeoutMs?: number; onProgress?: (e: Np2ptpProgressEvent) => void } = {}
+    opts: {
+      timeoutMs?: number;
+      onProgress?: (e: Np2ptpProgressEvent) => void;
+    } = {}
   ): Promise<Np2ptpResultEvent> {
     await this.ensureReady();
     const id = this.nextId++;
@@ -478,83 +524,89 @@ git commit -m "feat: np2ptp daemon manager with id-correlated NDJSON requests"
 ### Task 3: Restart with exponential backoff ×3 + re-provide hook
 
 **Files:**
+
 - Modify: `src/main/services/np2ptp/np2ptp-daemon.ts`
 - Test: `src/main/services/np2ptp/np2ptp-daemon.test.ts` (append)
 
 **Interfaces:**
+
 - Produces: after an unexpected exit, daemon re-spawns with delays `[1000, 2000, 4000]` ms (injectable `backoffDelaysMs` option for tests → `[1, 2, 4]`). After each successful respawn (`ready` seen), awaits `onRestart()` (re-provide hook) and resets the attempt counter. After 3 consecutive failures, calls `onCrash(3)` and stays down until the next `ensureReady()`/`request()` call (which starts a fresh cycle). `shutdown()`/`killAndRestart()` do not trigger `onCrash`.
 
 - [ ] **Step 1: Write the failing test** (append to describe block)
 
 ```ts
-  it("respawns after crash and calls onRestart, resetting attempts on success", async () => {
-    const procs: FakeProc[] = [];
-    let restarts = 0;
-    const daemon = new Np2ptpDaemon({
-      spawnFn: () => {
-        const p = new FakeProc();
-        procs.push(p);
-        return p;
-      },
-      onRestart: async () => {
-        restarts++;
-      },
-      backoffDelaysMs: [1, 2, 4],
-    });
-    const readyP = daemon.ensureReady();
-    procs[0].emitLine(READY);
-    await readyP;
-    procs[0].emit("exit", 1); // crash
-    await new Promise((r) => setTimeout(r, 10)); // let backoff fire
-    assert.equal(procs.length, 2);
-    procs[1].emitLine(READY);
-    await new Promise((r) => setTimeout(r, 10));
-    assert.equal(restarts, 1);
+it("respawns after crash and calls onRestart, resetting attempts on success", async () => {
+  const procs: FakeProc[] = [];
+  let restarts = 0;
+  const daemon = new Np2ptpDaemon({
+    spawnFn: () => {
+      const p = new FakeProc();
+      procs.push(p);
+      return p;
+    },
+    onRestart: async () => {
+      restarts++;
+    },
+    backoffDelaysMs: [1, 2, 4],
   });
+  const readyP = daemon.ensureReady();
+  procs[0].emitLine(READY);
+  await readyP;
+  procs[0].emit("exit", 1); // crash
+  await new Promise((r) => setTimeout(r, 10)); // let backoff fire
+  assert.equal(procs.length, 2);
+  procs[1].emitLine(READY);
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(restarts, 1);
+});
 
-  it("gives up after 3 failed respawns and reports crash", async () => {
-    const procs: FakeProc[] = [];
-    let crashed = 0;
-    const daemon = new Np2ptpDaemon({
-      spawnFn: () => {
-        const p = new FakeProc();
-        procs.push(p);
-        // simulate instant death, never ready
-        setTimeout(() => p.emit("exit", 1), 1);
-        return p;
-      },
-      onCrash: (n) => {
-        crashed = n;
-      },
-      backoffDelaysMs: [1, 2, 4],
-      readyTimeoutMs: 50,
-    });
-    daemon.ensureReady().catch(() => {});
-    await new Promise((r) => setTimeout(r, 100));
-    assert.equal(procs.length, 4); // initial + 3 retries
-    assert.equal(crashed, 3);
+it("gives up after 3 failed respawns and reports crash", async () => {
+  const procs: FakeProc[] = [];
+  let crashed = 0;
+  const daemon = new Np2ptpDaemon({
+    spawnFn: () => {
+      const p = new FakeProc();
+      procs.push(p);
+      // simulate instant death, never ready
+      setTimeout(() => p.emit("exit", 1), 1);
+      return p;
+    },
+    onCrash: (n) => {
+      crashed = n;
+    },
+    backoffDelaysMs: [1, 2, 4],
+    readyTimeoutMs: 50,
   });
+  daemon.ensureReady().catch(() => {});
+  await new Promise((r) => setTimeout(r, 100));
+  assert.equal(procs.length, 4); // initial + 3 retries
+  assert.equal(crashed, 3);
+});
 
-  it("killAndRestart aborts in-flight requests and comes back ready", async () => {
-    const procs: FakeProc[] = [];
-    const daemon = new Np2ptpDaemon({
-      spawnFn: () => {
-        const p = new FakeProc();
-        procs.push(p);
-        return p;
-      },
-      backoffDelaysMs: [1, 2, 4],
-    });
-    const readyP = daemon.ensureReady();
-    procs[0].emitLine(READY);
-    await readyP;
-    const inflight = daemon.request({ cmd: "fetch", uri: "np2ptp:ab", out: "D:/g" });
-    const restartP = daemon.killAndRestart();
-    await assert.rejects(inflight);
-    procs[1].emitLine(READY);
-    await restartP;
-    assert.equal(procs.length, 2);
+it("killAndRestart aborts in-flight requests and comes back ready", async () => {
+  const procs: FakeProc[] = [];
+  const daemon = new Np2ptpDaemon({
+    spawnFn: () => {
+      const p = new FakeProc();
+      procs.push(p);
+      return p;
+    },
+    backoffDelaysMs: [1, 2, 4],
   });
+  const readyP = daemon.ensureReady();
+  procs[0].emitLine(READY);
+  await readyP;
+  const inflight = daemon.request({
+    cmd: "fetch",
+    uri: "np2ptp:ab",
+    out: "D:/g",
+  });
+  const restartP = daemon.killAndRestart();
+  await assert.rejects(inflight);
+  procs[1].emitLine(READY);
+  await restartP;
+  assert.equal(procs.length, 2);
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -565,6 +617,7 @@ Expected: FAIL — `backoffDelaysMs` unknown / respawn not happening (procs.leng
 - [ ] **Step 3: Implement**
 
 In `np2ptp-daemon.ts`:
+
 - Add options: `backoffDelaysMs?: number[]` (default `[1000, 2000, 4000]`).
 - Add fields: `private attempts = 0; private intentionalExit = false;`
 - In `handleExit()`: after rejecting pendings, if `intentionalExit` → reset flag, return (no auto-respawn). Else if `attempts < backoffDelaysMs.length`: schedule `setTimeout(() => this.respawn(), backoffDelaysMs[this.attempts++])` (unref). Else call `options.onCrash?.(this.attempts)` and reset `attempts = 0`.
@@ -589,18 +642,20 @@ git commit -m "feat: np2ptp daemon exponential-backoff restart and re-provide ho
 ### Task 4: Binary path resolution + singleton wiring + app lifecycle
 
 **Files:**
+
 - Create: `src/main/services/np2ptp/binary-path.ts`
 - Create: `src/main/services/np2ptp/index.ts`
 - Modify: `src/main/main.ts` (startup bootstrap area, near `bootstrapDownloadsOnStartup` at :123)
 - Modify: `electron-builder.yml:5-9` (`extraResources`)
 
 **Interfaces:**
+
 - Produces:
   ```ts
   // binary-path.ts
   export function getNp2ptpBinaryPath(): string;
   // index.ts
-  export const np2ptp: Np2ptpDaemon;      // singleton, prod spawnFn
+  export const np2ptp: Np2ptpDaemon; // singleton, prod spawnFn
   export async function reprovideAllFromDb(): Promise<void>;
   ```
 - Resolution order: `process.env.NP2PTP_BIN` if set → packaged: `path.join(process.resourcesPath, "np2ptp", "np2ptp.exe" | "np2ptp")` → dev fallback: `E:\Repos\np2ptp\target\release\np2ptp.exe` is NOT hardcoded; instead dev requires `NP2PTP_BIN` and index.ts logs a clear warn + daemon stays unavailable if missing (graceful: Hydra works, np2ptp features error with toast).
@@ -630,6 +685,7 @@ git commit -m "feat: np2ptp daemon lifecycle wiring and binary resolution"
 ### Task 5: Downloader enum + URI classification + display names
 
 **Files:**
+
 - Modify: `src/shared/constants.ts:1-15` (enum)
 - Modify: `src/shared/index.ts:134-171` (`getDownloadersForUri`)
 - Modify: `src/renderer/src/constants.ts:3-15` (`DOWNLOADER_NAME`)
@@ -637,6 +693,7 @@ git commit -m "feat: np2ptp daemon lifecycle wiring and binary resolution"
 - Test: `src/shared/index.test.ts` (create if absent)
 
 **Interfaces:**
+
 - Produces: `Downloader.Np2ptp = 14` (append — NEVER renumber existing members, they're persisted in user DBs); `getDownloadersForUri("np2ptp:<hex>")` → `[Downloader.Np2ptp]`; display name `"NP2PTP"`.
 
 - [ ] **Step 1: Write the failing test**
@@ -650,7 +707,9 @@ import { Downloader } from "./constants";
 
 describe("getDownloadersForUri", () => {
   it("classifies np2ptp uris", () => {
-    assert.deepEqual(getDownloadersForUri("np2ptp:deadbeef"), [Downloader.Np2ptp]);
+    assert.deepEqual(getDownloadersForUri("np2ptp:deadbeef"), [
+      Downloader.Np2ptp,
+    ]);
   });
 
   it("still classifies magnets without np2ptp", () => {
@@ -695,11 +754,13 @@ git commit -m "feat: recognize np2ptp: uris as a downloader"
 ### Task 6: Download flow — fetch via daemon, progress into Hydra's model
 
 **Files:**
+
 - Modify: `src/main/services/download/download-manager.ts` (`startDownload:1761`, `getDownloadStatus:590`, `cancelDownload:1035`, `pauseDownload:1012`, `isHttpDownloader:262`)
 - Modify: `src/types/level.types.ts:83` (`Download`: add `np2ptpUri?: string; nptpPath?: string; np2ptpSeed?: boolean;`)
 - Test: none new (logic lives in daemon manager already tested; manager wiring is glue over tested `request`) — manual smoke in Task 10.
 
 **Interfaces:**
+
 - Consumes: `np2ptp` singleton (Task 4), `Downloader.Np2ptp` (Task 5).
 - Produces: `Downloader.Np2ptp` branch in `startDownload`:
   ```ts
@@ -740,6 +801,7 @@ git commit -m "feat: route np2ptp downloads through the daemon with progress map
 ### Task 7: Convert IPC + auto-convert on completion
 
 **Files:**
+
 - Create: `src/main/events/library/convert-game-to-np2ptp.ts`
 - Modify: `src/main/events/index.ts` (register import)
 - Modify: `src/preload/index.ts` (~:467, follow `getUserPreferences` pattern)
@@ -748,6 +810,7 @@ git commit -m "feat: route np2ptp downloads through the daemon with progress map
 - Modify: `src/types/level.types.ts:135` (`UserPreferences`: add `np2ptpAutoConvert?: boolean; useNp2ptpForTorrents?: boolean;` — both here so Task 8/9 don't touch types again)
 
 **Interfaces:**
+
 - Produces IPC `convertGameToNp2ptp(shop: GameShop, objectId: string): Promise<{ uri: string }>`:
   ```ts
   // convert-game-to-np2ptp.ts (registerEvent pattern, copy toggle-automatic-cloud-sync.ts structure)
@@ -755,10 +818,18 @@ git commit -m "feat: route np2ptp downloads through the daemon with progress map
   if (!download) throw new Error("no download record");
   const payload =
     download.downloader === Downloader.Torrent
-      ? { cmd: "convert", torrent: torrentFilePathFor(download), data: downloadFolder }
+      ? {
+          cmd: "convert",
+          torrent: torrentFilePathFor(download),
+          data: downloadFolder,
+        }
       : { cmd: "convert", path: downloadFolder };
   const result = await np2ptp.request(payload, { timeoutMs: 30 * 60_000 });
-  await downloadsSublevel.put(key, { ...download, np2ptpUri: result.root as string, nptpPath: nptpPathFrom(result) });
+  await downloadsSublevel.put(key, {
+    ...download,
+    np2ptpUri: result.root as string,
+    nptpPath: nptpPathFrom(result),
+  });
   return { uri: result.root as string };
   ```
   where `downloadFolder = path.join(download.downloadPath, download.folderName!)`. For the torrent `.torrent` file path: Hydra's python sidecar exposes `torrent_files` RPC — if a cached `.torrent` path isn't recoverable there, fall back to `{cmd:"convert", path}` (unverified) and note it in the returned payload as `verified: false`; UI copy states the difference (Task 9 keys `np2ptp_convert_verified` / `np2ptp_convert_unverified`).
@@ -784,12 +855,14 @@ git commit -m "feat: convert-to-np2ptp IPC with optional auto-convert on complet
 ### Task 8: Seed toggle IPC + startup/restart re-provide + uninstall unprovide
 
 **Files:**
+
 - Create: `src/main/events/library/toggle-np2ptp-seed.ts`
 - Modify: `src/main/events/index.ts`, `src/preload/index.ts`, `src/renderer/src/declaration.d.ts`
 - Modify: `src/main/main.ts` (bootstrap: after `bootstrapDownloadsOnStartup`, call `np2ptp.ensureReady().then(reprovideAllFromDb).catch(logger.warn)` — lazy, non-blocking)
 - Modify: game removal path — find delete flow via `gamesSublevel`/`downloadsSublevel` removal events (`src/main/events/library/` remove/delete handlers): before file deletion, if `download.np2ptpUri` → `np2ptp.request({cmd:"unprovide", root: download.np2ptpUri}).catch(logger.warn)` and clear `np2ptpSeed`.
 
 **Interfaces:**
+
 - Produces IPC `toggleNp2ptpSeed(shop, objectId, enabled: boolean): Promise<void>` — copy `toggle-automatic-cloud-sync.ts:1` structure: get record, `enabled ? provide(nptpPath) : unprovide(np2ptpUri)`, then `downloadsSublevel.put(key, { ...download, np2ptpSeed: enabled })`. Requires `nptpPath || np2ptpUri` present, else throws "game is not converted".
 - No-copy invariant enforced here: unprovide BEFORE delete (Global Constraints).
 
@@ -811,13 +884,16 @@ git commit -m "feat: per-game np2ptp seed toggle with re-provide on boot and unp
 ### Task 9: Settings toggles + i18n strings
 
 **Files:**
+
 - Modify: `src/renderer/src/pages/settings/settings-context-integrations.tsx` (add "NP2PTP" group: `useNp2ptpForTorrents` toggle)
 - Modify: `src/renderer/src/pages/settings/settings-context-downloads.tsx:220-228` (append `np2ptpAutoConvert` CheckboxField next to `seed_after_download_complete`)
 - Modify: `src/locales/en/translation.json`, `src/locales/pt-BR/translation.json`
 
 **Interfaces:**
+
 - Consumes: `UserPreferences.useNp2ptpForTorrents` / `np2ptpAutoConvert` (Task 7 types), `settingsContext.updateUserPreferences` — exact `CheckboxField` pattern from `settings-context-downloads.tsx:220-228`.
 - i18n keys (both locales — en shown, pt-BR translated):
+
   ```json
   "use_np2ptp_for_torrents": "Use NP2PTP as torrent engine",
   "use_np2ptp_for_torrents_description": "Route magnet and torrent downloads through the NP2PTP network instead of libtorrent. Completed downloads are instantly seedable on NP2PTP.",
@@ -831,6 +907,7 @@ git commit -m "feat: per-game np2ptp seed toggle with re-provide on boot and unp
   "np2ptp_copy_link": "Copy NP2PTP link",
   "np2ptp_daemon_crashed": "NP2PTP stopped responding and could not be restarted"
   ```
+
   pt-BR: "Usar NP2PTP como engine de torrent", "Baixar magnets e torrents pela rede NP2PTP em vez do libtorrent. Downloads concluídos ficam prontos pra semear no NP2PTP.", "Converter downloads pro NP2PTP automaticamente", "Converter pro NP2PTP", "Jogo convertido — link NP2PTP salvo na sua biblioteca", "Você está publicando o que está no disco, como está (origem não verificada)", "Ninguém está semeando esse conteúdo agora", "Semear no NP2PTP", "Parar de semear no NP2PTP", "Copiar link NP2PTP", "O NP2PTP parou de responder e não conseguiu reiniciar"
 
 - [ ] **Step 1: Implement** (toggles + all keys in both files)
@@ -851,12 +928,14 @@ git commit -m "feat: np2ptp settings toggles and locale strings"
 ### Task 10: Game-page UI (convert button, seed menu, crash toast) + manual smoke
 
 **Files:**
+
 - Modify: `src/renderer/src/pages/game-details/modals/game-options-modal/downloads-section.tsx` (convert button + copy-link + unverified note)
 - Modify: `src/renderer/src/pages/downloads/download-group.tsx:826-847` (context menu: `np2ptp_seed`/`np2ptp_stop_seed`, gated on `game.download?.np2ptpUri != null`; mirror `stop_seeding` entries)
 - Modify: `src/renderer/src/app.tsx:138` area (subscribe `on-np2ptp-crashed` → `showErrorToast(t("np2ptp_daemon_crashed"))`; `on-np2ptp-warn` → warning toast)
 - Modify: `src/preload/index.ts` (the two `on-np2ptp-*` listeners, follow `onDownloadProgress:131` pattern)
 
 **Interfaces:**
+
 - Consumes: `window.electron.convertGameToNp2ptp` (Task 7), `window.electron.toggleNp2ptpSeed` (Task 8), toast pattern `useToast()` per `hero-panel-actions.tsx:63,166`.
 - Convert button behavior: disabled while converting (local `useState`), on success `showSuccessToast(t("np2ptp_convert_success"))` + context game refresh (`updateGame()` from `gameDetailsContext`), on error `showErrorToast(err.message)`. Copy-link button visible when `game.download?.np2ptpUri` — `navigator.clipboard.writeText(uri)`.
 
@@ -884,10 +963,12 @@ git commit -m "feat: np2ptp convert and seed UI on game pages"
 ### Task 11: Torrent-engine toggle routing
 
 **Files:**
+
 - Modify: `src/main/services/download/download-manager.ts` (`startDownload:1761` — the `Downloader.Torrent` path)
 - Test: none (glue; covered by manual smoke)
 
 **Interfaces:**
+
 - Consumes: `UserPreferences.useNp2ptpForTorrents` (Task 7 types), daemon `torrent` cmd.
 - Produces: in `startDownload`, when `download.downloader === Downloader.Torrent && (await getUserPreferences())?.useNp2ptpForTorrents` → instead of the PythonRPC payload, run the np2ptp branch from Task 6 but with `{ cmd: "torrent", input: download.uri, out: path.join(download.downloadPath, download.folderName ?? "") }`; on result, persist `np2ptpUri = result.root` (torrent downloads arrive auto-bridged → instantly convertible-free and seed-togglable). Progress/abort/error handling identical to Task 6 (same three maps).
 - Documented trade-off (already in design doc): no ongoing BitTorrent seeding for these downloads; np2ptp-side seeding only.
