@@ -846,6 +846,32 @@ export function DownloadGroup({
           },
         },
         {
+          label: t("np2ptp_stop_seed"),
+          disabled: deleting,
+          icon: <UnlinkIcon />,
+          show:
+            game.download?.np2ptpUri != null &&
+            game.download?.np2ptpSeed === true,
+          onClick: () => {
+            window.electron
+              .toggleNp2ptpSeed(game.shop, game.objectId, false)
+              .then(() => updateLibrary());
+          },
+        },
+        {
+          label: t("np2ptp_seed"),
+          disabled: deleting,
+          icon: <LinkIcon />,
+          show:
+            game.download?.np2ptpUri != null &&
+            game.download?.np2ptpSeed !== true,
+          onClick: () => {
+            window.electron
+              .toggleNp2ptpSeed(game.shop, game.objectId, true)
+              .then(() => updateLibrary());
+          },
+        },
+        {
           label: t("delete"),
           disabled: deleting,
           icon: <TrashIcon />,
