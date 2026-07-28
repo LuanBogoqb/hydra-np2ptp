@@ -5,6 +5,17 @@
 export const NP2PTP_LATEST_RELEASE_URL =
   "https://api.github.com/repos/LuanBogoqb/np2ptp/releases/latest";
 
+export const NP2PTP_SUMS_SIG_ASSET = "SHA256SUMS.minisig";
+
+/**
+ * Minisign public key for np2ptp releases. CI signs SHA256SUMS with the
+ * matching secret key; the updater refuses any release whose SHA256SUMS
+ * fails this check (fail-closed). Rotating the key means shipping a new
+ * fork build — that is intentional: the key is the trust anchor.
+ */
+export const NP2PTP_MINISIGN_PUBKEY =
+  "RWSvbqA2exn6e3XkG53XH4blBh0pNcOAVEuaJCnzDGQLqYN1jqUGrkYW";
+
 export function np2ptpAssetNameForPlatform(platform: NodeJS.Platform): string {
   return platform === "win32"
     ? "np2ptp-windows-x86_64.exe"

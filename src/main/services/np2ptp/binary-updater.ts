@@ -4,8 +4,11 @@ import crypto from "node:crypto";
 import { app } from "electron";
 import { SystemPath } from "../system-path";
 import { logger } from "../logger";
+import { NativeAddon } from "../native-addon";
 import {
   NP2PTP_LATEST_RELEASE_URL,
+  NP2PTP_SUMS_SIG_ASSET,
+  NP2PTP_MINISIGN_PUBKEY,
   np2ptpAssetNameForPlatform,
   parseSha256Sums,
   versionFromTag,
@@ -110,16 +113,45 @@ export async function stageLatestNp2ptp(): Promise<void> {
 
     const binaryUrl = findUrl(wantedName);
     const sumsUrl = findUrl("SHA256SUMS");
+    const sumsSigUrl = findUrl(NP2PTP_SUMS_SIG_ASSET);
     if (!binaryUrl || !sumsUrl) {
       logger.warn(
         `np2ptp updater: release ${tag} missing ${wantedName} or SHA256SUMS`
       );
       return;
     }
+    if (!sumsSigUrl) {
+      // Fail-closed: an unsigned release is indistinguishable from a
+      // compromised release channel. Keep the binary we already trust.
+      logger.error(
+        `np2ptp updater: release ${tag} has no ${NP2PTP_SUMS_SIG_ASSET} — refusing update`
+      );
+      return;
+    }
 
     const sumsResponse = await fetch(sumsUrl);
     if (!sumsResponse.ok) throw new Error(`SHA256SUMS ${sumsResponse.status}`);
-    const expected = parseSha256Sums(await sumsResponse.text()).get(wantedName);
+    const sumsText = await sumsResponse.text();
+
+    const sigResponse = await fetch(sumsSigUrl);
+    if (!sigResponse.ok)
+      throw new Error(`${NP2PTP_SUMS_SIG_ASSET} ${sigResponse.status}`);
+    const sigText = await sigResponse.text();
+
+    if (
+      !NativeAddon.verifyMinisign(
+        Buffer.from(sumsText, "utf8"),
+        sigText,
+        NP2PTP_MINISIGN_PUBKEY
+      )
+    ) {
+      logger.error(
+        `np2ptp updater: SHA256SUMS signature verification FAILED for ${tag} — refusing update`
+      );
+      return;
+    }
+
+    const expected = parseSha256Sums(sumsText).get(wantedName);
     if (!expected) {
       logger.warn(`np2ptp updater: SHA256SUMS has no entry for ${wantedName}`);
       return;

@@ -9,6 +9,7 @@ crate-type = ["cdylib"]
 [dependencies]
 image = { version = "0.25.8", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
 mime_guess = "2.0.5"
+minisign-verify = "0.2"
 napi = { version = "3.5.2", default-features = false, features = ["napi8", "tokio_rt"] }
 napi-derive = "3.3.2"
 sysinfo = "0.37.2"
