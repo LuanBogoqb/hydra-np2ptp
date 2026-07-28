@@ -648,7 +648,8 @@ export class DownloadManager {
       })
       .catch((error) => {
         if (this.np2ptpProgressState === state) {
-          state.error = error instanceof Error ? error : new Error(String(error));
+          state.error =
+            error instanceof Error ? error : new Error(String(error));
         }
       });
   }
@@ -711,7 +712,10 @@ export class DownloadManager {
     const now = Date.now();
     const dtSeconds = (now - state.lastTs) / 1000;
     if (dtSeconds >= 1) {
-      state.speed = Math.max(0, (bytesDownloaded - state.lastBytes) / dtSeconds);
+      state.speed = Math.max(
+        0,
+        (bytesDownloaded - state.lastBytes) / dtSeconds
+      );
       state.lastBytes = bytesDownloaded;
       state.lastTs = now;
     }
@@ -870,6 +874,31 @@ export class DownloadManager {
       const gameFilesManager = new GameFilesManager(game.shop, game.objectId);
       gameFilesManager.searchAndBindExecutable();
       void gameFilesManager.autoLinkClassicsDiscs();
+    }
+
+    if (
+      userPreferences?.np2ptpAutoConvert &&
+      download.downloader !== Downloader.Np2ptp &&
+      !download.np2ptpUri
+    ) {
+      // Deferred import to dodge a module cycle (events -> services -> events)
+      void import("../../events/library/convert-game-to-np2ptp")
+        .then(({ convertDownloadToNp2ptp }) =>
+          convertDownloadToNp2ptp(download.shop, download.objectId)
+        )
+        .then(() => {
+          WindowManager.sendToAppWindows(
+            "on-np2ptp-warn",
+            `converted ${game.title} to np2ptp`
+          );
+        })
+        .catch((err) => {
+          logger.error("np2ptp auto-convert failed", err);
+          WindowManager.sendToAppWindows(
+            "on-np2ptp-warn",
+            `np2ptp auto-convert failed: ${err instanceof Error ? err.message : err}`
+          );
+        });
     }
 
     await this.processNextQueuedDownload();

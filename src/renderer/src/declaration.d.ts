@@ -177,6 +177,19 @@ declare global {
       objectId: string,
       automaticCloudSync: boolean
     ) => Promise<void>;
+    convertGameToNp2ptp: (
+      shop: GameShop,
+      objectId: string
+    ) => Promise<{ uri: string; verified: boolean }>;
+    toggleNp2ptpSeed: (
+      shop: GameShop,
+      objectId: string,
+      enabled: boolean
+    ) => Promise<void>;
+    onNp2ptpCrashed: (cb: () => void) => () => Electron.IpcRenderer;
+    onNp2ptpWarn: (
+      cb: (message: string) => void
+    ) => () => Electron.IpcRenderer;
     toggleGameMangohud: (
       shop: GameShop,
       objectId: string,

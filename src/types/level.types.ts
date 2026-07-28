@@ -149,6 +149,8 @@ export interface UserPreferences {
   retroAchievementsWebApiKey?: string | null;
   retroAchievementsUsername?: string | null;
   preferQuitInsteadOfHiding?: boolean;
+  useNp2ptpForTorrents?: boolean;
+  np2ptpAutoConvert?: boolean;
   runAtStartup?: boolean;
   startMinimized?: boolean;
   launchToLibraryPage?: boolean;
