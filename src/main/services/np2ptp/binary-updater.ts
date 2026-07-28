@@ -50,12 +50,11 @@ export function seedManagedBinaryFromResources(): void {
 export function finalizeStagedUpdate(): void {
   try {
     // Leftover from a previous swap; the old binary is no longer running.
-    if (fs.existsSync(oldBinaryPath())) fs.rmSync(oldBinaryPath(), { force: true });
+    if (fs.existsSync(oldBinaryPath()))
+      fs.rmSync(oldBinaryPath(), { force: true });
 
     if (!fs.existsSync(stagedBinaryPath())) return;
-    const stagedVersion = fs
-      .readFileSync(stagedVersionPath(), "utf8")
-      .trim();
+    const stagedVersion = fs.readFileSync(stagedVersionPath(), "utf8").trim();
     if (!stagedVersion) return;
 
     if (fs.existsSync(managedBinaryPath())) {

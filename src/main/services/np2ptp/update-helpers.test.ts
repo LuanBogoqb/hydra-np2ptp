@@ -9,7 +9,10 @@ import {
 
 describe("np2ptp update helpers", () => {
   it("picks the platform asset", () => {
-    assert.equal(np2ptpAssetNameForPlatform("win32"), "np2ptp-windows-x86_64.exe");
+    assert.equal(
+      np2ptpAssetNameForPlatform("win32"),
+      "np2ptp-windows-x86_64.exe"
+    );
     assert.equal(np2ptpAssetNameForPlatform("linux"), "np2ptp-linux-x86_64");
   });
 

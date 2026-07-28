@@ -25,7 +25,10 @@ export function versionFromTag(tag: string): string {
   return tag.replace(/^[vV]/, "");
 }
 
-export function isNewerVersion(current: string | null, latest: string): boolean {
+export function isNewerVersion(
+  current: string | null,
+  latest: string
+): boolean {
   if (!current) return true;
   if (current === latest) return false;
   const a = current.split(".").map(Number);
