@@ -102,6 +102,9 @@ export interface Download {
   fileIndices?: number[];
   selectedFilesSize?: number | null;
   customTrackers?: string[];
+  np2ptpUri?: string;
+  nptpPath?: string;
+  np2ptpSeed?: boolean;
 }
 
 export interface DownloadLayoutState {

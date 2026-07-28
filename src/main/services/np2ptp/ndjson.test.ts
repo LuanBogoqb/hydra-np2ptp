@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { NdjsonAccumulator } from "./ndjson.ts";
+import { NdjsonAccumulator } from "./np2ptp-daemon.ts";
 
 describe("NdjsonAccumulator", () => {
   it("parses one complete line", () => {

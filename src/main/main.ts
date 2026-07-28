@@ -26,6 +26,9 @@ import {
   Wine,
   WindowManager,
   logger,
+  np2ptp,
+  isNp2ptpAvailable,
+  reprovideAllFromDb,
 } from "@main/services";
 import { migrateDownloadSources } from "./helpers/migrate-download-sources";
 import { getDirSize } from "./services/download/helpers";
@@ -194,6 +197,17 @@ export const loadState = async () => {
   WindowManager.sendDownloadsUpdated();
 
   startMainLoop();
+
+  if (isNp2ptpAvailable()) {
+    np2ptp
+      .ensureReady()
+      .then(() => reprovideAllFromDb())
+      .catch((err) => logger.error("np2ptp bootstrap failed", err));
+  } else {
+    logger.warn(
+      "np2ptp binary not found; np2ptp features disabled (set NP2PTP_BIN in dev)"
+    );
+  }
 
   if (process.platform === "win32") {
     CommonRedistManager.downloadCommonRedist();

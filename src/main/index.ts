@@ -15,6 +15,7 @@ import {
 } from "@main/services";
 import resources from "@locales";
 import { PythonRPC } from "./services/python-rpc";
+import { np2ptp } from "./services/np2ptp";
 import { db, gamesSublevel, levelKeys } from "./level";
 import { GameShop, UserPreferences } from "@types";
 import { launchGame, openClassicsGame } from "./helpers";
@@ -324,6 +325,7 @@ app.on("before-quit", async (e) => {
     PowerSaveBlockerManager.reset();
     /* Disconnects Python RPC */
     PythonRPC.kill();
+    np2ptp.shutdown().catch(() => {});
     await clearGamesPlaytime();
     canAppBeClosed = true;
     app.quit();
