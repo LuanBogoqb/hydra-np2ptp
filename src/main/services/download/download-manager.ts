@@ -614,7 +614,11 @@ export class DownloadManager {
     return this.getDownloadStatusFromRpc();
   }
 
-  private static startNp2ptpDownload(download: Download, downloadId: string) {
+  private static startNp2ptpDownload(
+    download: Download,
+    downloadId: string,
+    command?: object
+  ) {
     this.downloadingGameId = downloadId;
     this.isPreparingDownload = false;
     this.usingJsDownloader = false;
@@ -633,7 +637,11 @@ export class DownloadManager {
 
     np2ptp
       .request(
-        { cmd: "fetch", uri: download.uri, out: download.downloadPath },
+        command ?? {
+          cmd: "fetch",
+          uri: download.uri,
+          out: download.downloadPath,
+        },
         {
           onProgress: (event) => {
             if (this.np2ptpProgressState === state) {
@@ -1961,6 +1969,32 @@ export class DownloadManager {
       logger.log("[DownloadManager] Using np2ptp downloader");
       this.startNp2ptpDownload(download, downloadId);
       return;
+    }
+
+    if (
+      download.downloader === Downloader.Torrent &&
+      !download.fileIndices?.length
+    ) {
+      const userPreferences = await db.get<string, UserPreferences | null>(
+        levelKeys.userPreferences,
+        { valueEncoding: "json" }
+      );
+
+      // Selective file downloads stay on libtorrent — the daemon's torrent
+      // command downloads whole torrents only.
+      if (userPreferences?.useNp2ptpForTorrents) {
+        logger.log(
+          "[DownloadManager] Routing torrent through np2ptp (engine toggle)"
+        );
+        this.startNp2ptpDownload(download, downloadId, {
+          cmd: "torrent",
+          input: download.uri,
+          out: download.folderName
+            ? path.join(download.downloadPath, download.folderName)
+            : download.downloadPath,
+        });
+        return;
+      }
     }
 
     if (isHttp) {
