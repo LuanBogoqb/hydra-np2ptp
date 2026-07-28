@@ -181,20 +181,26 @@ export const loadState = async () => {
   }
 
   // For torrents use Python RPC; HTTP downloads use JS downloader.
-  const isTorrent = downloadToResume?.downloader === Downloader.Torrent;
-  if (downloadToResume && !isTorrent) {
-    // Start Python RPC for seeding only, then resume HTTP download with JS
-    await DownloadManager.startRPC(undefined, downloadsToSeed);
-    await DownloadManager.startDownload(downloadToResume).catch((err) => {
-      // If resume fails, just log it - user can manually retry
-      logger.error("Failed to auto-resume download:", err);
-    });
-  } else {
-    // Use Python RPC for everything (torrent or fallback)
-    await DownloadManager.startRPC(
-      downloadToResume ?? undefined,
-      downloadsToSeed
-    );
+  // A dead Python RPC (missing libtorrent, broken interpreter) must not abort
+  // the rest of boot — np2ptp and the UI still work without it.
+  try {
+    const isTorrent = downloadToResume?.downloader === Downloader.Torrent;
+    if (downloadToResume && !isTorrent) {
+      // Start Python RPC for seeding only, then resume HTTP download with JS
+      await DownloadManager.startRPC(undefined, downloadsToSeed);
+      await DownloadManager.startDownload(downloadToResume).catch((err) => {
+        // If resume fails, just log it - user can manually retry
+        logger.error("Failed to auto-resume download:", err);
+      });
+    } else {
+      // Use Python RPC for everything (torrent or fallback)
+      await DownloadManager.startRPC(
+        downloadToResume ?? undefined,
+        downloadsToSeed
+      );
+    }
+  } catch (err) {
+    logger.error("Python RPC bootstrap failed; torrent engine unavailable", err);
   }
 
   WindowManager.sendDownloadsUpdated();
@@ -220,7 +226,12 @@ export const loadState = async () => {
   if (isNp2ptpAvailable()) {
     np2ptp
       .ensureReady()
-      .then(() => reprovideAllFromDb())
+      .then((ready) => {
+        logger.info(
+          `np2ptp daemon ready (v${ready.version}, peer ${ready.peer_id})`
+        );
+        return reprovideAllFromDb();
+      })
       .catch((err) => logger.error("np2ptp bootstrap failed", err));
   } else {
     logger.warn(
