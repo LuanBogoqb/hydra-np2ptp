@@ -873,6 +873,7 @@
     "seed_after_download_complete": "Semear após a conclusão do download",
     "use_np2ptp_for_torrents": "Usar NP2PTP como engine de torrent",
     "np2ptp_auto_convert": "Converter downloads pro NP2PTP automaticamente",
+    "np2ptp_auto_update": "Manter a engine NP2PTP atualizada automaticamente",
     "show_hidden_achievement_description": "Mostrar descrição de conquistas ocultas antes de desbloqueá-las",
     "account": "Conta",
     "no_users_blocked": "Você não bloqueou nenhum usuário",

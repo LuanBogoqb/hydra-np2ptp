@@ -915,6 +915,7 @@
     "seed_after_download_complete": "Seed after download complete",
     "use_np2ptp_for_torrents": "Use NP2PTP as torrent engine",
     "np2ptp_auto_convert": "Convert downloads to NP2PTP automatically",
+    "np2ptp_auto_update": "Keep the NP2PTP engine up to date automatically",
     "show_hidden_achievement_description": "Show hidden achievement descriptions before unlocking them",
     "account": "Account",
     "hydra_cloud": "Hydra Cloud",

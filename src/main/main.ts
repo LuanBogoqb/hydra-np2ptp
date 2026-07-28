@@ -29,6 +29,9 @@ import {
   np2ptp,
   isNp2ptpAvailable,
   reprovideAllFromDb,
+  seedManagedBinaryFromResources,
+  finalizeStagedUpdate,
+  stageLatestNp2ptp,
 } from "@main/services";
 import { migrateDownloadSources } from "./helpers/migrate-download-sources";
 import { getDirSize } from "./services/download/helpers";
@@ -197,6 +200,22 @@ export const loadState = async () => {
   WindowManager.sendDownloadsUpdated();
 
   startMainLoop();
+
+  // Binary upkeep is the fork's job (np2ptp never updates itself): finalize a
+  // previously staged download BEFORE the daemon spawns, then check for a new
+  // release in the background — silent, gated on the auto-update preference.
+  seedManagedBinaryFromResources();
+  finalizeStagedUpdate();
+  db.get<string, UserPreferences | null>(levelKeys.userPreferences, {
+    valueEncoding: "json",
+  })
+    .then((preferences) => {
+      if (preferences?.np2ptpAutoUpdate ?? true) {
+        return stageLatestNp2ptp();
+      }
+      return undefined;
+    })
+    .catch((err) => logger.warn("np2ptp update check failed", err));
 
   if (isNp2ptpAvailable()) {
     np2ptp

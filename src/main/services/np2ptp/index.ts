@@ -9,6 +9,11 @@ import { Np2ptpDaemon } from "./np2ptp-daemon";
 
 export { Np2ptpDaemon } from "./np2ptp-daemon";
 export { getNp2ptpBinaryPath } from "./binary-path";
+export {
+  seedManagedBinaryFromResources,
+  finalizeStagedUpdate,
+  stageLatestNp2ptp,
+} from "./binary-updater";
 
 export const np2ptpStorePath = () =>
   path.join(SystemPath.getPath("userData"), "np2ptp");

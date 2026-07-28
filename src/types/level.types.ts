@@ -151,6 +151,7 @@ export interface UserPreferences {
   preferQuitInsteadOfHiding?: boolean;
   useNp2ptpForTorrents?: boolean;
   np2ptpAutoConvert?: boolean;
+  np2ptpAutoUpdate?: boolean;
   runAtStartup?: boolean;
   startMinimized?: boolean;
   launchToLibraryPage?: boolean;

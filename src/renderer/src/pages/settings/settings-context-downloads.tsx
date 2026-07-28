@@ -48,6 +48,7 @@ export function SettingsContextDownloads() {
     seedAfterDownloadComplete: false,
     np2ptpAutoConvert: false,
     useNp2ptpForTorrents: false,
+    np2ptpAutoUpdate: true,
     showDownloadSpeedInMegabytes: false,
     extractFilesByDefault: true,
     createStartMenuShortcut: true,
@@ -75,6 +76,7 @@ export function SettingsContextDownloads() {
         userPreferences.seedAfterDownloadComplete ?? false,
       np2ptpAutoConvert: userPreferences.np2ptpAutoConvert ?? false,
       useNp2ptpForTorrents: userPreferences.useNp2ptpForTorrents ?? false,
+      np2ptpAutoUpdate: userPreferences.np2ptpAutoUpdate ?? true,
       showDownloadSpeedInMegabytes:
         userPreferences.showDownloadSpeedInMegabytes ?? false,
       extractFilesByDefault: userPreferences.extractFilesByDefault ?? true,
@@ -247,6 +249,16 @@ export function SettingsContextDownloads() {
           onChange={() =>
             handleChange({
               np2ptpAutoConvert: !form.np2ptpAutoConvert,
+            })
+          }
+        />
+
+        <CheckboxField
+          label={t("np2ptp_auto_update")}
+          checked={form.np2ptpAutoUpdate}
+          onChange={() =>
+            handleChange({
+              np2ptpAutoUpdate: !form.np2ptpAutoUpdate,
             })
           }
         />
