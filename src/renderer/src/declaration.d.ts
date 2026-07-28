@@ -187,9 +187,7 @@ declare global {
       enabled: boolean
     ) => Promise<void>;
     onNp2ptpCrashed: (cb: () => void) => () => Electron.IpcRenderer;
-    onNp2ptpWarn: (
-      cb: (message: string) => void
-    ) => () => Electron.IpcRenderer;
+    onNp2ptpWarn: (cb: (message: string) => void) => () => Electron.IpcRenderer;
     toggleGameMangohud: (
       shop: GameShop,
       objectId: string,

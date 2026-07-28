@@ -46,6 +46,8 @@ export function SettingsContextDownloads() {
 
   const [form, setForm] = useState({
     seedAfterDownloadComplete: false,
+    np2ptpAutoConvert: false,
+    useNp2ptpForTorrents: false,
     showDownloadSpeedInMegabytes: false,
     extractFilesByDefault: true,
     createStartMenuShortcut: true,
@@ -71,6 +73,8 @@ export function SettingsContextDownloads() {
     setForm({
       seedAfterDownloadComplete:
         userPreferences.seedAfterDownloadComplete ?? false,
+      np2ptpAutoConvert: userPreferences.np2ptpAutoConvert ?? false,
+      useNp2ptpForTorrents: userPreferences.useNp2ptpForTorrents ?? false,
       showDownloadSpeedInMegabytes:
         userPreferences.showDownloadSpeedInMegabytes ?? false,
       extractFilesByDefault: userPreferences.extractFilesByDefault ?? true,
@@ -223,6 +227,26 @@ export function SettingsContextDownloads() {
           onChange={() =>
             handleChange({
               seedAfterDownloadComplete: !form.seedAfterDownloadComplete,
+            })
+          }
+        />
+
+        <CheckboxField
+          label={t("use_np2ptp_for_torrents")}
+          checked={form.useNp2ptpForTorrents}
+          onChange={() =>
+            handleChange({
+              useNp2ptpForTorrents: !form.useNp2ptpForTorrents,
+            })
+          }
+        />
+
+        <CheckboxField
+          label={t("np2ptp_auto_convert")}
+          checked={form.np2ptpAutoConvert}
+          onChange={() =>
+            handleChange({
+              np2ptpAutoConvert: !form.np2ptpAutoConvert,
             })
           }
         />

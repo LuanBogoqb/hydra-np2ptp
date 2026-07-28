@@ -22,7 +22,9 @@ const deleteGameFolder = async (
   if (download.np2ptpUri) {
     await np2ptp
       .request({ cmd: "unprovide", root: download.np2ptpUri })
-      .catch((err) => logger.warn("np2ptp unprovide before delete failed", err));
+      .catch((err) =>
+        logger.warn("np2ptp unprovide before delete failed", err)
+      );
   }
 
   const deleteFile = async (filePath: string, isDirectory = false) => {

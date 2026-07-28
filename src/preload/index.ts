@@ -523,10 +523,8 @@ contextBridge.exposeInMainWorld("electron", {
     return () => ipcRenderer.removeListener("on-np2ptp-crashed", listener);
   },
   onNp2ptpWarn: (cb: (message: string) => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      message: string
-    ) => cb(message);
+    const listener = (_event: Electron.IpcRendererEvent, message: string) =>
+      cb(message);
     ipcRenderer.on("on-np2ptp-warn", listener);
     return () => ipcRenderer.removeListener("on-np2ptp-warn", listener);
   },
