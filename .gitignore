@@ -23,4 +23,6 @@ Future-updates.md
 TO-DO.md
 .planning/
 .claude/
-.venv313/
+.venv31*/
+np2ptp/*
+!np2ptp/.gitkeep
