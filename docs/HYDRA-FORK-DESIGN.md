@@ -1,7 +1,10 @@
 # Hydra Launcher × NP2PTP — Fork Design (Part 2)
 
-**Date:** 2026-07-27
-**Status:** Approved design, not yet implemented. The fork does not exist yet.
+**Date:** 2026-07-27 · **Reality-checked:** 2026-09-06
+**Status:** **IMPLEMENTED.** This is the design as approved in July; the fork exists, is ported to
+upstream v4.1.3 on branch `dev-4.1.3`, and ships installers from CI. For what the code actually
+does today, read [`STATUS.md`](STATUS.md) — it is the current one and this file is the intent.
+Where the two disagree, `STATUS.md` wins; one such disagreement is called out inline below.
 **Home:** this document belongs to the Hydra fork, NOT to the np2ptp repo.
 The np2ptp side of the work (daemon, multi-manifest serve, bridge output dir
 and progress, configurable endpoints, self-update) shipped separately in
@@ -34,6 +37,16 @@ does, exactly as `np2ptp-gui` already does with its `BinaryManager`:
   accepts; the certificate is documented in np2ptp's README. On Linux there
   is no Authenticode, so verify the SHA-256 against the release's
   `SHA256SUMS` asset, which the np2ptp release workflow publishes.
+
+  > **Not what was built (2026-09-06).** The implementation dropped the split and uses **one
+  > mechanism on both platforms**: the updater fetches `SHA256SUMS` plus `SHA256SUMS.minisig` and
+  > verifies the **minisign** signature against a pinned public key
+  > (`src/main/services/np2ptp/update-helpers.ts`, `binary-updater.ts`, native
+  > `verify_minisign` in `native/hydra-native/src/signature.rs`), then checks the asset's SHA-256
+  > against the verified list. There is **no** Authenticode thumbprint check and no accepted-signer
+  > list in this fork — that is np2ptp-gui's mechanism, not this one. One key, one code path, both
+  > OSes.
+
 - Refuse anything that fails verification, delete the download, and keep the
   binary that is already there.
 - A running executable cannot be overwritten on Windows, so rename the
