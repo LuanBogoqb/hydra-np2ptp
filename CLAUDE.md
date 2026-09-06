@@ -60,10 +60,10 @@ yarn lint / format            # eslint --fix / prettier
 yarn build:win|mac|linux      # build:native + build:python-rpc + electron-vite build + electron-builder
 ```
 
-Python: `.venv312` (3.12.10, libtorrent 2.1.1.0, cx_Freeze 7.2.3) backs the libtorrent sidecar;
+Python: `.venv312` (3.12.10, libtorrent 2.1.1.0, `cx_Freeze` 7.2.3) backs the libtorrent sidecar;
 recreate with `python -m venv .venv312 && .venv312/Scripts/pip install -r requirements.txt`.
 `.env` at repo root carries 6 keys, including `MAIN_VITE_NIMBUS_API_URL` (not in `.env.example`);
-only `MAIN_VITE_*`/`RENDERER_VITE_*` vars reach the app, electron-vite injects nothing else.
+only `MAIN_VITE_*` and `RENDERER_VITE_*` vars reach the app, electron-vite injects nothing else.
 Husky's pre-commit runs `format`, pre-push runs `lint` then `typecheck`.
 
 ## Golden rules
