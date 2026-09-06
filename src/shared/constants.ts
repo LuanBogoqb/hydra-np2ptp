@@ -13,6 +13,8 @@ export enum Downloader {
   Premiumize = 12,
   AllDebrid = 13,
   ArchiveOrg = 14,
+  /** Faixa privada do fork: o upstream avanca a sequencia dele a cada release. */
+  Np2ptp = 100,
 }
 
 export enum DownloadSourceStatus {

@@ -103,6 +103,9 @@ export interface Download {
   fileIndices?: number[];
   selectedFilesSize?: number | null;
   customTrackers?: string[];
+  np2ptpUri?: string;
+  nptpPath?: string;
+  np2ptpSeed?: boolean;
 }
 
 export interface DownloadLayoutState {
@@ -147,6 +150,9 @@ export interface UserPreferences {
   retroAchievementsWebApiKey?: string | null;
   retroAchievementsUsername?: string | null;
   preferQuitInsteadOfHiding?: boolean;
+  useNp2ptpForTorrents?: boolean;
+  np2ptpAutoConvert?: boolean;
+  np2ptpAutoUpdate?: boolean;
   runAtStartup?: boolean;
   startMinimized?: boolean;
   launchToLibraryPage?: boolean;

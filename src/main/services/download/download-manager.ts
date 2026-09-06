@@ -20,6 +20,8 @@ import {
   RootzApi,
 } from "../hosters";
 import { PythonRPC } from "../python-rpc";
+import { np2ptp, np2ptpStorePath } from "../np2ptp";
+import type { Np2ptpResultEvent } from "@types";
 import {
   LibtorrentPayload,
   LibtorrentStatus,
@@ -89,6 +91,17 @@ interface AllDebridBatchState {
   batchSpeed: number;
 }
 
+interface Np2ptpDownloadState {
+  downloadId: string;
+  done: number;
+  total: number;
+  lastBytes: number;
+  lastTs: number;
+  speed: number;
+  result?: Np2ptpResultEvent;
+  error?: Error;
+}
+
 export class DownloadManager {
   private static downloadingGameId: string | null = null;
   private static jsDownloader: JsHttpDownloader | null = null;
@@ -97,6 +110,8 @@ export class DownloadManager {
   private static allDebridBatch: AllDebridBatchState | null = null;
   private static maxDownloadSpeedBytesPerSecond: number | null = null;
   private static startGeneration = 0;
+  private static usingNp2ptp = false;
+  private static np2ptpProgressState: Np2ptpDownloadState | null = null;
   private static orphanedDownloadCandidate: {
     downloadKey: string;
     generation: number;
@@ -298,7 +313,9 @@ export class DownloadManager {
   }
 
   private static isHttpDownloader(downloader: Downloader): boolean {
-    return downloader !== Downloader.Torrent;
+    return (
+      downloader !== Downloader.Torrent && downloader !== Downloader.Np2ptp
+    );
   }
 
   private static normalizeDownloadSpeedLimit(
@@ -626,10 +643,157 @@ export class DownloadManager {
   }
 
   private static async getDownloadStatus(): Promise<DownloadProgress | null> {
+    if (this.usingNp2ptp) {
+      return this.getDownloadStatusFromNp2ptp();
+    }
     if (this.usingJsDownloader) {
       return this.getDownloadStatusFromJs();
     }
     return this.getDownloadStatusFromRpc();
+  }
+
+  private static startNp2ptpDownload(
+    download: Download,
+    downloadId: string,
+    command?: object
+  ) {
+    this.downloadingGameId = downloadId;
+    this.isPreparingDownload = false;
+    this.usingJsDownloader = false;
+    this.allDebridBatch = null;
+    this.usingNp2ptp = true;
+
+    const state: Np2ptpDownloadState = {
+      downloadId,
+      done: 0,
+      total: 0,
+      lastBytes: 0,
+      lastTs: Date.now(),
+      speed: 0,
+    };
+    this.np2ptpProgressState = state;
+
+    np2ptp
+      .request(
+        command ?? {
+          cmd: "fetch",
+          uri: download.uri,
+          out: download.folderName
+            ? path.join(download.downloadPath, download.folderName)
+            : download.downloadPath,
+        },
+        {
+          onProgress: (event) => {
+            if (this.np2ptpProgressState === state) {
+              state.done = event.done;
+              state.total = event.total;
+            }
+          },
+        }
+      )
+      .then((result) => {
+        if (this.np2ptpProgressState === state) state.result = result;
+      })
+      .catch((error) => {
+        if (this.np2ptpProgressState === state) {
+          state.error =
+            error instanceof Error ? error : new Error(String(error));
+        }
+      });
+  }
+
+  private static async getDownloadStatusFromNp2ptp(): Promise<DownloadProgress | null> {
+    const state = this.np2ptpProgressState;
+    if (!state || !this.downloadingGameId) return null;
+    const downloadId = this.downloadingGameId;
+
+    if (state.error) {
+      this.usingNp2ptp = false;
+      this.np2ptpProgressState = null;
+      await this.handleRuntimeDownloadError(downloadId, state.error);
+      return null;
+    }
+
+    const download = await downloadsSublevel.get(downloadId);
+    if (!download) return null;
+
+    if (state.result) {
+      this.usingNp2ptp = false;
+      this.np2ptpProgressState = null;
+
+      const bytesTotal =
+        typeof state.result.bytes_total === "number"
+          ? state.result.bytes_total
+          : (download.fileSize ?? 0);
+      const root =
+        typeof state.result.root === "string" ? state.result.root : null;
+      const updated: Download = {
+        ...download,
+        progress: 1,
+        bytesDownloaded: bytesTotal,
+        fileSize: bytesTotal || download.fileSize,
+        status: "active",
+        np2ptpUri: root ?? download.np2ptpUri,
+        // fetch/torrent results are already bridged; the manifest sits in the
+        // daemon store, which is what provide (seeding) needs later.
+        nptpPath: root
+          ? path.join(
+              np2ptpStorePath(),
+              "manifests",
+              `${root.replace(/^np2ptp:/, "")}.nptp`
+            )
+          : download.nptpPath,
+      };
+      await downloadsSublevel.put(downloadId, updated);
+
+      return {
+        numPeers: 0,
+        numSeeds: 0,
+        downloadSpeed: 0,
+        timeRemaining: 0,
+        isDownloadingMetadata: false,
+        isCheckingFiles: false,
+        progress: 1,
+        gameId: downloadId,
+        download: updated,
+      };
+    }
+
+    // done/total count chunks; bytes are scaled off the known size when the
+    // download record carries one (fetches of unknown size report 0 bytes).
+    const progress = state.total > 0 ? state.done / state.total : 0;
+    const knownSize = download.selectedFilesSize ?? download.fileSize ?? 0;
+    const bytesDownloaded = Math.floor(progress * knownSize);
+
+    const now = Date.now();
+    const dtSeconds = (now - state.lastTs) / 1000;
+    if (dtSeconds >= 1) {
+      state.speed = Math.max(
+        0,
+        (bytesDownloaded - state.lastBytes) / dtSeconds
+      );
+      state.lastBytes = bytesDownloaded;
+      state.lastTs = now;
+    }
+
+    await downloadsSublevel.put(downloadId, {
+      ...download,
+      bytesDownloaded,
+      progress,
+      status: "active",
+    });
+
+    return {
+      numPeers: 0,
+      numSeeds: 0,
+      downloadSpeed: state.speed,
+      timeRemaining: calculateETA(knownSize, bytesDownloaded, state.speed),
+      isDownloadingMetadata: state.total === 0,
+      isCheckingFiles: false,
+      progress,
+      gameId: downloadId,
+      download,
+    };
   }
 
   private static async cancelOrphanedDownload(downloadKey: string) {
@@ -856,6 +1020,34 @@ export class DownloadManager {
       void gameFilesManager.autoLinkClassicsDiscs();
     }
 
+    if (
+      userPreferences?.np2ptpAutoConvert &&
+      download.downloader !== Downloader.Np2ptp &&
+      !download.np2ptpUri &&
+      // Extraction rewrites the folder while conversion would be hashing it;
+      // auto-convert only applies to downloads that stay as they landed.
+      !download.automaticallyExtract
+    ) {
+      // Deferred import to dodge a module cycle (events -> services -> events)
+      void import("../../events/library/convert-game-to-np2ptp")
+        .then(({ convertDownloadToNp2ptp }) =>
+          convertDownloadToNp2ptp(download.shop, download.objectId)
+        )
+        .then(() => {
+          WindowManager.sendToAppWindows(
+            "on-np2ptp-warn",
+            `converted ${game.title} to np2ptp`
+          );
+        })
+        .catch((err) => {
+          logger.error("np2ptp auto-convert failed", err);
+          WindowManager.sendToAppWindows(
+            "on-np2ptp-warn",
+            `np2ptp auto-convert failed: ${err instanceof Error ? err.message : err}`
+          );
+        });
+    }
+
     await this.processNextQueuedDownload();
   }
 
@@ -1065,6 +1257,8 @@ export class DownloadManager {
     this.usingJsDownloader = false;
     this.jsDownloader = null;
     this.allDebridBatch = null;
+    this.usingNp2ptp = false;
+    this.np2ptpProgressState = null;
     WindowManager.mainWindow?.setProgressBar(-1);
     WindowManager.sendToAppWindows("on-download-progress", null);
 
@@ -1153,7 +1347,16 @@ export class DownloadManager {
   }
 
   static async pauseDownload(downloadKey = this.downloadingGameId) {
-    if (this.usingJsDownloader && this.jsDownloader) {
+    if (this.usingNp2ptp && downloadKey === this.downloadingGameId) {
+      logger.log("[DownloadManager] Aborting np2ptp download (daemon restart)");
+      this.usingNp2ptp = false;
+      this.np2ptpProgressState = null;
+      // The daemon has no pause command; a restart aborts the fetch. Fetched
+      // chunks stay in the np2ptp store, so resuming re-fetches only the rest.
+      await np2ptp
+        .killAndRestart()
+        .catch((err) => logger.error("Failed to abort np2ptp download", err));
+    } else if (this.usingJsDownloader && this.jsDownloader) {
       logger.log("[DownloadManager] Pausing JS download");
       this.jsDownloader.pauseDownload();
     } else if (downloadKey) {
@@ -1183,7 +1386,18 @@ export class DownloadManager {
       // late-resolving prepare cannot spawn a downloader after cancellation.
       this.startGeneration += 1;
 
-      if (this.usingJsDownloader && this.jsDownloader) {
+      if (this.usingNp2ptp) {
+        logger.log(
+          "[DownloadManager] Cancelling np2ptp download (daemon restart)"
+        );
+        this.usingNp2ptp = false;
+        this.np2ptpProgressState = null;
+        await np2ptp
+          .killAndRestart()
+          .catch((err) =>
+            logger.error("Failed to cancel np2ptp download", err)
+          );
+      } else if (this.usingJsDownloader && this.jsDownloader) {
         logger.log("[DownloadManager] Cancelling JS download");
         this.jsDownloader.cancelDownload();
         this.jsDownloader = null;
@@ -1984,6 +2198,59 @@ export class DownloadManager {
     // The generation token lets a concurrent cancel/restart for the same id
     // invalidate this in-flight preparation before it spawns a downloader.
     const myGeneration = ++this.startGeneration;
+
+    if (download.downloader === Downloader.Np2ptp) {
+      logger.log("[DownloadManager] Using np2ptp downloader");
+
+      // Fetches land in their own folder — everything downstream (extraction,
+      // deletion, conversion) assumes a per-game folderName.
+      const folderName = download.folderName ?? download.objectId;
+      if (!download.folderName) {
+        await downloadsSublevel.put(downloadId, { ...download, folderName });
+      }
+
+      if (this.startGeneration !== myGeneration) {
+        logger.log(
+          "[DownloadManager] Download was superseded during preparation; aborting start"
+        );
+        return;
+      }
+
+      this.startNp2ptpDownload({ ...download, folderName }, downloadId);
+      return;
+    }
+
+    if (
+      download.downloader === Downloader.Torrent &&
+      !download.fileIndices?.length
+    ) {
+      const userPreferences = await db.get<string, UserPreferences | null>(
+        levelKeys.userPreferences,
+        { valueEncoding: "json" }
+      );
+
+      // Selective file downloads stay on libtorrent — the daemon's torrent
+      // command downloads whole torrents only.
+      if (userPreferences?.useNp2ptpForTorrents) {
+        if (this.startGeneration !== myGeneration) {
+          logger.log(
+            "[DownloadManager] Download was superseded during preparation; aborting start"
+          );
+          return;
+        }
+        logger.log(
+          "[DownloadManager] Routing torrent through np2ptp (engine toggle)"
+        );
+        this.startNp2ptpDownload(download, downloadId, {
+          cmd: "torrent",
+          input: download.uri,
+          out: download.folderName
+            ? path.join(download.downloadPath, download.folderName)
+            : download.downloadPath,
+        });
+        return;
+      }
+    }
 
     if (isHttp) {
       logger.log("[DownloadManager] Using JS HTTP downloader");

@@ -103,7 +103,7 @@ export function App() {
 
   const toast = useAppSelector((state) => state.toast);
 
-  const { showSuccessToast, showErrorToast } = useToast();
+  const { showSuccessToast, showErrorToast, showWarningToast } = useToast();
 
   const [showArchiveDeletionModal, setShowArchiveDeletionModal] =
     useState(false);
@@ -169,6 +169,20 @@ export function App() {
 
     return () => unsubscribe();
   }, [updateLibrary]);
+
+  useEffect(() => {
+    const unsubscribeCrash = window.electron.onNp2ptpCrashed(() => {
+      showErrorToast(t("np2ptp_daemon_crashed"));
+    });
+    const unsubscribeWarn = window.electron.onNp2ptpWarn((message) => {
+      showWarningToast(message);
+    });
+
+    return () => {
+      unsubscribeCrash();
+      unsubscribeWarn();
+    };
+  }, [showErrorToast, showWarningToast, t]);
 
   useEffect(() => {
     if (!lastPacket?.gameId) return;

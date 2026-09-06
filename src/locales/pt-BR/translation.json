@@ -11,7 +11,9 @@
     "error_overlay_details": "Detalhes",
     "error_boundary_origin": "Origem",
     "error_boundary_component_trace": "Rastreamento de componentes",
-    "error_boundary_restart": "Reiniciar"
+    "error_boundary_restart": "Reiniciar",
+    "np2ptp_daemon_crashed": "O NP2PTP parou de responder e não conseguiu reiniciar",
+    "np2ptp_no_providers": "Ninguém está semeando esse conteúdo agora"
   },
   "home": {
     "hot": "Populares",
@@ -924,7 +926,13 @@
     "view_fullscreen": "Ver em tela cheia",
     "previous_media": "Anterior",
     "next_media": "Próximo",
-    "not_enough_space_on_disk": "Espaço insuficiente neste disco. Necessário {{required}}, disponível {{available}}."
+    "not_enough_space_on_disk": "Espaço insuficiente neste disco. Necessário {{required}}, disponível {{available}}.",
+    "np2ptp_convert": "Converter pro NP2PTP",
+    "np2ptp_converting": "Convertendo…",
+    "np2ptp_convert_success": "Jogo convertido — link NP2PTP salvo no registro do download",
+    "np2ptp_convert_unverified": "Você está publicando o que está no disco, como está (origem não verificada)",
+    "np2ptp_copy_link": "Copiar link NP2PTP",
+    "np2ptp_link_copied": "Link NP2PTP copiado"
   },
   "activation": {
     "title": "Ativação",
@@ -982,7 +990,9 @@
     "extraction_failed_title": "Extração falhou",
     "extraction_failed_description": "O Hydra não conseguiu extrair este arquivo. Verifique a integridade do arquivo/espaço em disco e tente extrair novamente.",
     "download_halted_title": "Download interrompido",
-    "download_halted_description": "{{title}} foi interrompido porque a pasta de download ficou sem espaço. Libere espaço e retome o download."
+    "download_halted_description": "{{title}} foi interrompido porque a pasta de download ficou sem espaço. Libere espaço e retome o download.",
+    "np2ptp_seed": "Semear no NP2PTP",
+    "np2ptp_stop_seed": "Parar de semear no NP2PTP"
   },
   "settings": {
     "setup_official_website": "Site oficial",
@@ -1119,6 +1129,9 @@
     "launch_big_picture_in_library_page": "Iniciar o Big Picture na página da Biblioteca",
     "disable_nsfw_alert": "Desativar alerta de conteúdo inapropriado",
     "seed_after_download_complete": "Semear após a conclusão do download",
+    "use_np2ptp_for_torrents": "Usar NP2PTP como engine de torrent",
+    "np2ptp_auto_convert": "Converter downloads pro NP2PTP automaticamente",
+    "np2ptp_auto_update": "Manter a engine NP2PTP atualizada automaticamente",
     "show_hidden_achievement_description": "Mostrar descrição de conquistas ocultas antes de desbloqueá-las",
     "account": "Conta",
     "no_users_blocked": "Você não bloqueou nenhum usuário",

@@ -105,6 +105,11 @@ type HydraNativeModule = {
     snapshotId: string,
     tempRoot: string
   ) => Promise<void>;
+  verifyMinisign: (
+    content: Buffer,
+    signatureText: string,
+    publicKeyB64: string
+  ) => boolean;
 };
 
 export type SystemProcessMap = {
@@ -341,6 +346,26 @@ export class NativeAddon {
     } catch (error) {
       logger.error("Failed to process friend image via native addon", error);
       throw error;
+    }
+  }
+
+  /**
+   * Detached minisign verification (np2ptp updater). Returns false on ANY
+   * failure — including a missing/broken addon — so callers stay fail-closed.
+   */
+  public static verifyMinisign(
+    content: Buffer,
+    signatureText: string,
+    publicKeyB64: string
+  ): boolean {
+    try {
+      return this.load().verifyMinisign(content, signatureText, publicKeyB64);
+    } catch (error) {
+      logger.error(
+        "Failed to verify minisign signature via native addon",
+        error
+      );
+      return false;
     }
   }
 

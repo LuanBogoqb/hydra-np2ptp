@@ -21,6 +21,9 @@ const formatLimitInputValue = (
 
 const buildForm = (preferences: UserPreferences | null) => ({
   seedAfterDownloadComplete: preferences?.seedAfterDownloadComplete ?? false,
+  np2ptpAutoConvert: preferences?.np2ptpAutoConvert ?? false,
+  useNp2ptpForTorrents: preferences?.useNp2ptpForTorrents ?? false,
+  np2ptpAutoUpdate: preferences?.np2ptpAutoUpdate ?? true,
   showDownloadSpeedInMegabytes:
     preferences?.showDownloadSpeedInMegabytes ?? false,
   extractFilesByDefault: preferences?.extractFilesByDefault ?? true,
@@ -216,6 +219,36 @@ export function SettingsContextDownloads() {
           onChange={() =>
             handleChange({
               seedAfterDownloadComplete: !form.seedAfterDownloadComplete,
+            })
+          }
+        />
+
+        <CheckboxField
+          label={t("use_np2ptp_for_torrents")}
+          checked={form.useNp2ptpForTorrents}
+          onChange={() =>
+            handleChange({
+              useNp2ptpForTorrents: !form.useNp2ptpForTorrents,
+            })
+          }
+        />
+
+        <CheckboxField
+          label={t("np2ptp_auto_convert")}
+          checked={form.np2ptpAutoConvert}
+          onChange={() =>
+            handleChange({
+              np2ptpAutoConvert: !form.np2ptpAutoConvert,
+            })
+          }
+        />
+
+        <CheckboxField
+          label={t("np2ptp_auto_update")}
+          checked={form.np2ptpAutoUpdate}
+          onChange={() =>
+            handleChange({
+              np2ptpAutoUpdate: !form.np2ptpAutoUpdate,
             })
           }
         />

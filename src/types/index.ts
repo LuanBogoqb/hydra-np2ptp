@@ -720,3 +720,4 @@ export * from "./retroarch.types";
 export * from "./artwork.types";
 export * from "./cloud-save.types";
 export * from "./souvenir.types";
+export * from "./np2ptp.types";

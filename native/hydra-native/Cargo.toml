@@ -15,6 +15,7 @@ globset = "=0.4.15"
 image = { version = "0.25.8", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
 indexmap = { version = "2.14", features = ["serde"] }
 mime_guess = "2.0.5"
+minisign-verify = "0.2"
 napi = { version = "3.5.2", default-features = false, features = ["napi8", "tokio_rt"] }
 napi-derive = "3.3.2"
 rayon = "=1.11.0"

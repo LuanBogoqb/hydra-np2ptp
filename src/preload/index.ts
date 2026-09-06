@@ -857,6 +857,21 @@ contextBridge.exposeInMainWorld("electron", {
       objectId,
       automaticCloudSync
     ),
+  convertGameToNp2ptp: (shop: GameShop, objectId: string) =>
+    ipcRenderer.invoke("convertGameToNp2ptp", shop, objectId),
+  toggleNp2ptpSeed: (shop: GameShop, objectId: string, enabled: boolean) =>
+    ipcRenderer.invoke("toggleNp2ptpSeed", shop, objectId, enabled),
+  onNp2ptpCrashed: (cb: () => void) => {
+    const listener = () => cb();
+    ipcRenderer.on("on-np2ptp-crashed", listener);
+    return () => ipcRenderer.removeListener("on-np2ptp-crashed", listener);
+  },
+  onNp2ptpWarn: (cb: (message: string) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, message: string) =>
+      cb(message);
+    ipcRenderer.on("on-np2ptp-warn", listener);
+    return () => ipcRenderer.removeListener("on-np2ptp-warn", listener);
+  },
   toggleGameMangohud: (
     shop: GameShop,
     objectId: string,

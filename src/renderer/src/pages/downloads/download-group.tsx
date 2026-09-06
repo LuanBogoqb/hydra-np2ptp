@@ -17,6 +17,7 @@ import {
   useDownload,
   useLibrary,
   useDate,
+  useToast,
 } from "@renderer/hooks";
 
 import "./download-group.scss";
@@ -563,6 +564,7 @@ export function DownloadGroup({
 }: Readonly<DownloadGroupProps>) {
   const { t } = useTranslation("downloads");
   const { t: tGameDetails } = useTranslation("game_details");
+  const { showErrorToast } = useToast();
   const navigate = useNavigate();
 
   const userPreferences = useAppSelector(
@@ -854,6 +856,38 @@ export function DownloadGroup({
             game.download?.downloader === Downloader.Torrent,
           onClick: () => {
             resumeSeeding(game.shop, game.objectId);
+          },
+        },
+        {
+          label: t("np2ptp_stop_seed"),
+          disabled: deleting,
+          icon: <UnlinkIcon />,
+          show:
+            game.download?.np2ptpUri != null &&
+            game.download?.np2ptpSeed === true,
+          onClick: () => {
+            window.electron
+              .toggleNp2ptpSeed(game.shop, game.objectId, false)
+              .then(() => updateLibrary())
+              .catch((err) =>
+                showErrorToast(err instanceof Error ? err.message : String(err))
+              );
+          },
+        },
+        {
+          label: t("np2ptp_seed"),
+          disabled: deleting,
+          icon: <LinkIcon />,
+          show:
+            game.download?.np2ptpUri != null &&
+            game.download?.np2ptpSeed !== true,
+          onClick: () => {
+            window.electron
+              .toggleNp2ptpSeed(game.shop, game.objectId, true)
+              .then(() => updateLibrary())
+              .catch((err) =>
+                showErrorToast(err instanceof Error ? err.message : String(err))
+              );
           },
         },
         {

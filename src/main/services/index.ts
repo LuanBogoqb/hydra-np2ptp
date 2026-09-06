@@ -5,6 +5,7 @@ export * from "./window-manager";
 export * from "./download";
 export * from "./download-layout-state";
 export * from "./download-orchestrator";
+export * from "./np2ptp";
 export * from "./process-watcher";
 export * from "./launched-game-pids";
 export * from "./main-loop";

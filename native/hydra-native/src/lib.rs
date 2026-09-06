@@ -15,6 +15,7 @@ pub use cloud_save::restore::{
 pub use cloud_save::save_scanner::scan_resolved_save_rules;
 pub use cloud_save::upload::upload_local_save_blob;
 
+mod signature;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
