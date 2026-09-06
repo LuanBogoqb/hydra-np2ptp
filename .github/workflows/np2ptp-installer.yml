@@ -42,8 +42,14 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      # The Windows runner times out fetching tarballs from registry.yarnpkg.com
+      # often enough to matter; yarn's own retry gives up and fails the job.
+      # bash on both platforms so the retry reads the same everywhere.
       - name: Install dependencies
-        run: yarn --frozen-lockfile
+        shell: bash
+        run: |
+          yarn install --frozen-lockfile --network-timeout 600000 ||
+            yarn install --frozen-lockfile --network-timeout 600000
 
       - name: Install Python
         uses: actions/setup-python@v5
