@@ -73,7 +73,7 @@ appImage:
 npmRebuild: false
 publish:
   provider: github
-  owner: hydralauncher
-  repo: hydra
+  owner: LuanBogoqb
+  repo: hydra-np2ptp
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/

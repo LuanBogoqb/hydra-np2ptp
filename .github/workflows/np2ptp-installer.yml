@@ -1,0 +1,152 @@
+# Installer build for the np2ptp fork.
+#
+# Upstream's build.yml/release.yml are kept as they are: they push to
+# hydralauncher's S3, Sentry and webhooks, none of which this fork has. This
+# workflow is the fork's own line - it verifies the np2ptp binary, packages it,
+# and publishes the installers as a prerelease on this repository.
+name: Build installer
+
+on:
+  push:
+    branches:
+      - dev-4.1.3
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-2022
+            artifact: windows
+          - os: ubuntu-latest
+            artifact: linux
+      fail-fast: false
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.21.0
+          cache: "yarn"
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: yarn --frozen-lockfile
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.9
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build Python RPC with cx_Freeze
+        run: python python_rpc/setup.py build
+
+      # Fails the build when SHA256SUMS is unsigned, signed with another key,
+      # or does not match the bytes that were downloaded. Same pinned key the
+      # app enforces at runtime.
+      - name: Fetch and verify np2ptp binary
+        run: node --import ./scripts/register-ts-node.mjs scripts/fetch-np2ptp-binary.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Windows
+        if: matrix.os == 'windows-2022'
+        run: yarn build:win --publish never
+        env:
+          MAIN_VITE_API_URL: ${{ vars.MAIN_VITE_API_URL }}
+          MAIN_VITE_AUTH_URL: ${{ vars.MAIN_VITE_AUTH_URL }}
+          MAIN_VITE_NIMBUS_API_URL: ${{ vars.MAIN_VITE_NIMBUS_API_URL }}
+          MAIN_VITE_LAUNCHER_SUBDOMAIN: ${{ vars.MAIN_VITE_LAUNCHER_SUBDOMAIN }}
+          RENDERER_VITE_REAL_DEBRID_REFERRAL_ID: ${{ vars.RENDERER_VITE_REAL_DEBRID_REFERRAL_ID }}
+          RENDERER_VITE_TORBOX_REFERRAL_CODE: ${{ vars.RENDERER_VITE_TORBOX_REFERRAL_CODE }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # AppImage and deb only. electron-builder.yml also lists snap and rpm for
+      # upstream's own distribution; building them here costs runner minutes for
+      # formats nobody installs from this fork.
+      - name: Build Linux
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          yarn build:native
+          yarn build:python-rpc
+          npx electron-vite build
+          npx electron-builder --linux AppImage deb --publish never
+        env:
+          MAIN_VITE_API_URL: ${{ vars.MAIN_VITE_API_URL }}
+          MAIN_VITE_AUTH_URL: ${{ vars.MAIN_VITE_AUTH_URL }}
+          MAIN_VITE_NIMBUS_API_URL: ${{ vars.MAIN_VITE_NIMBUS_API_URL }}
+          MAIN_VITE_LAUNCHER_SUBDOMAIN: ${{ vars.MAIN_VITE_LAUNCHER_SUBDOMAIN }}
+          RENDERER_VITE_REAL_DEBRID_REFERRAL_ID: ${{ vars.RENDERER_VITE_REAL_DEBRID_REFERRAL_ID }}
+          RENDERER_VITE_TORBOX_REFERRAL_CODE: ${{ vars.RENDERER_VITE_TORBOX_REFERRAL_CODE }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # latest*.yml and the blockmaps travel with the installers on purpose:
+      # electron-updater reads them from the release to offer an update, and
+      # this repository is now the updater's source (see publish: in
+      # electron-builder.yml).
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ matrix.artifact }}
+          if-no-files-found: error
+          path: |
+            dist/*-setup.exe
+            dist/*-portable.exe
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.blockmap
+            dist/latest*.yml
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - name: Download installers
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: installer-*
+          merge-multiple: true
+
+      - name: Resolve version
+        id: version
+        run: echo "value=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      # Prerelease on purpose: electron-updater skips prereleases unless the
+      # app opts in, so a build landing here never installs itself over someone
+      # running the fork. Promoting one to a real release is a deliberate act.
+      - name: Publish prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v${{ steps.version.outputs.value }}-np2ptp.${{ github.run_number }}
+        run: |
+          gh release create "$TAG" \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "$TAG" \
+            --notes "Hydra ${{ steps.version.outputs.value }} + np2ptp, built from \`${GITHUB_SHA:0:7}\` on \`${GITHUB_REF_NAME}\`.
+
+          The bundled np2ptp binary was verified against the pinned minisign key at build time." \
+            dist/*

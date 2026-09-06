@@ -71,6 +71,36 @@ with no fork code fails exactly the same tests on this machine.
 - `cloud-save/custom-path.test.ts` — two symlink/canonicalization cases, same
   short-path cause
 
+## CI
+
+`.github/workflows/np2ptp-installer.yml` builds the installers on every push to
+`dev-4.1.3` and on manual dispatch, for Windows (nsis setup + portable) and
+Linux (AppImage + deb), and publishes them as a **prerelease** on this
+repository. Upstream's `build.yml` / `release.yml` are left untouched: they
+target hydralauncher's S3, Sentry and webhooks.
+
+`scripts/fetch-np2ptp-binary.mjs` seeds `np2ptp/` with the release binary before
+packaging. It imports the shipping updater's own helpers through the ts-node
+loader rather than copying them, so CI and runtime share one pinned minisign
+key. A release whose `SHA256SUMS` is unsigned, signed with another key, or
+inconsistent with the downloaded bytes fails the build.
+
+Two upstream workflows trigger on `release: published`, which fires for
+prereleases too. `update-aur.yml` and `trigger-lp.yml` are now guarded with
+`if: github.repository == 'hydralauncher/hydra'` so a fork build cannot push to
+upstream's AUR or ping their landing page.
+
+`publish:` in `electron-builder.yml` was repointed from `hydralauncher/hydra` to
+`LuanBogoqb/hydra-np2ptp`. It feeds electron-updater, so before this change an
+installed fork build would have found upstream's 4.1.x releases and updated
+itself into vanilla Hydra, dropping np2ptp. Prereleases are invisible to
+electron-updater by default, so CI builds do not install themselves over a
+running fork.
+
+Repository variables carry the build-time config (`MAIN_VITE_API_URL`,
+`MAIN_VITE_AUTH_URL`, `MAIN_VITE_NIMBUS_API_URL`). The three referral/subdomain
+keys are empty in `.env` and are left unset.
+
 ## Not done yet
 
 - No runtime click-test of the ported UI. The build is verified, the app has not

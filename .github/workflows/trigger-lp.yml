@@ -6,6 +6,9 @@ on:
 
 jobs:
   build:
+    # Upstream infrastructure: pings hydralauncher's landing page. A fork
+    # prerelease must not call it.
+    if: github.repository == 'hydralauncher/hydra'
     runs-on: ubuntu-latest
 
     steps:

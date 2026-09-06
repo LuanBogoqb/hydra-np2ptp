@@ -7,6 +7,10 @@ on:
 
 jobs:
   update-aur:
+    # Upstream infrastructure. This fork publishes prereleases of its own, and
+    # `release: published` fires for those too - without this guard a fork build
+    # would try to push a package to upstream's AUR.
+    if: github.repository == 'hydralauncher/hydra'
     runs-on: ubuntu-latest
     container:
       image: archlinux:latest
