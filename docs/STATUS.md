@@ -97,6 +97,16 @@ itself into vanilla Hydra, dropping np2ptp. Prereleases are invisible to
 electron-updater by default, so CI builds do not install themselves over a
 running fork.
 
+First green run published `v4.1.3-np2ptp.2`: nsis setup, portable, AppImage,
+deb, plus `latest.yml` / `latest-linux.yml` for the updater. The packaged
+binary was checked end to end - `resources/np2ptp/np2ptp` inside the deb
+hashes to `32085b30...f83d43`, the same value `SHA256SUMS` lists for
+`np2ptp-linux-x86_64` in np2ptp v0.1.10.
+
+Windows failed its first attempt on `ESOCKETTIMEDOUT` pulling a tarball from
+registry.yarnpkg.com while the Linux job on the same run installed fine, so
+the install step now retries once with a 10-minute network timeout.
+
 Repository variables carry the build-time config (`MAIN_VITE_API_URL`,
 `MAIN_VITE_AUTH_URL`, `MAIN_VITE_NIMBUS_API_URL`). The three referral/subdomain
 keys are empty in `.env` and are left unset.

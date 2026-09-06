@@ -10,6 +10,11 @@ on:
   push:
     branches:
       - dev-4.1.3
+    # A docs-only commit would otherwise spend ~20 minutes of runner time and
+    # publish a prerelease identical to the previous one.
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
   workflow_dispatch:
 
 concurrency:
