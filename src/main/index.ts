@@ -37,12 +37,6 @@ crashReporter.start({
 
 const { autoUpdater } = updater;
 
-autoUpdater.setFeedURL({
-  provider: "github",
-  owner: "hydralauncher",
-  repo: "hydra",
-});
-
 autoUpdater.logger = logger;
 
 const gotTheLock = app.requestSingleInstanceLock();
