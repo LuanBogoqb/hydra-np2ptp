@@ -1,7 +1,8 @@
 import { shell } from "electron";
 import { registerEvent } from "../register-event";
-import { HydraApi } from "@main/services";
+import { HydraApi, logger } from "@main/services";
 import { db, levelKeys } from "@main/level";
+import { isSafeExternalUrl } from "@main/helpers/open-external-safe";
 import type { Auth, OpenCheckoutOptions } from "@types";
 
 const isAllowedPath = (path: string) =>
@@ -37,7 +38,13 @@ const openCheckout = async (
 
   checkoutUrl.searchParams.set("token", paymentToken);
 
-  shell.openExternal(checkoutUrl.toString());
+  const checkoutUrlString = checkoutUrl.toString();
+  if (!isSafeExternalUrl(checkoutUrlString)) {
+    logger.warn("Refused to open unsafe checkout URL:", checkoutUrlString);
+    return;
+  }
+
+  shell.openExternal(checkoutUrlString);
 };
 
 registerEvent("openCheckout", openCheckout);

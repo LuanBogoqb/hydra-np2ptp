@@ -30,6 +30,7 @@ import path from "node:path";
 import UserAgent from "user-agents";
 import { HydraApi } from "./hydra-api";
 import { logger } from "./logger";
+import { isSafeExternalUrl } from "@main/helpers/open-external-safe";
 import {
   addSteamGridDbCacheControl,
   isSteamGridDbArtworkRequest,
@@ -431,7 +432,12 @@ export class WindowManager {
     });
 
     mainWindow.webContents.setWindowOpenHandler((handler) => {
-      shell.openExternal(handler.url);
+      if (isSafeExternalUrl(handler.url)) {
+        shell.openExternal(handler.url);
+      } else {
+        logger.warn("Refused to open unsafe external URL:", handler.url);
+      }
+
       return { action: "deny" };
     });
   }
