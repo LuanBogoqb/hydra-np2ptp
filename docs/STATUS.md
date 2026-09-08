@@ -91,11 +91,15 @@ prereleases too. `update-aur.yml` and `trigger-lp.yml` are now guarded with
 upstream's AUR or ping their landing page.
 
 `publish:` in `electron-builder.yml` was repointed from `hydralauncher/hydra` to
-`LuanBogoqb/hydra-np2ptp`. It feeds electron-updater, so before this change an
-installed fork build would have found upstream's 4.1.x releases and updated
-itself into vanilla Hydra, dropping np2ptp. Prereleases are invisible to
+`LuanBogoqb/hydra-np2ptp`. Prereleases are invisible to
 electron-updater by default, so CI builds do not install themselves over a
 running fork.
+
+Correction (2026-09-08): the builder repoint alone was NOT sufficient.
+`src/main/index.ts` also called `autoUpdater.setFeedURL({owner:
+"hydralauncher", repo: "hydra"})`, and an explicit feed URL overrides the
+builder config at runtime — installed fork builds still polled upstream's
+release channel. The `setFeedURL` block is removed in the current round.
 
 First green run published `v4.1.3-np2ptp.2`: nsis setup, portable, AppImage,
 deb, plus `latest.yml` / `latest-linux.yml` for the updater. The packaged
@@ -110,6 +114,17 @@ the install step now retries once with a 10-minute network timeout.
 Repository variables carry the build-time config (`MAIN_VITE_API_URL`,
 `MAIN_VITE_AUTH_URL`, `MAIN_VITE_NIMBUS_API_URL`). The three referral/subdomain
 keys are empty in `.env` and are left unset.
+
+## Round 0 baseline (2026-09-08)
+
+Audit baseline before the overhaul rounds, at commit `f86129766`:
+
+- `yarn typecheck` (node + web): clean.
+- `yarn test`: green except the 4 known environment failures, reproduced
+  exactly (see "Verified on this base" above). None are fork regressions.
+- `yarn build`: green.
+- Fork delta at baseline: `git diff --stat v4.1.3..HEAD` = 49 files,
+  +3513/-26, `package.json` untouched.
 
 ## Not done yet
 
