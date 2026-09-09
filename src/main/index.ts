@@ -30,6 +30,7 @@ import { GameShop, UserPreferences } from "@types";
 import { launchGame, openClassicsGame } from "./helpers";
 import { isAllowedOrigin } from "@main/helpers/allowed-origin";
 import { isSafeExternalUrl } from "@main/helpers/open-external-safe";
+import { resolveLocalUrl } from "@main/helpers/local-protocol";
 import { refreshPortableShortcutLauncher } from "./helpers/shortcut-launch";
 import { lookupCachedPlatform } from "./events/library/get-library";
 import { loadState } from "./main";
@@ -92,9 +93,24 @@ const initializeApp = async () => {
 
   logger.info("Crash dumps directory", app.getPath("crashDumps"));
 
-  protocol.handle("local", (request) => {
-    const filePath = request.url.slice("local:".length);
-    return net.fetch(url.pathToFileURL(decodeURI(filePath)).toString());
+  // The local: scheme is registered privileged (supportFetchAPI), so without
+  // confinement any renderer content could fetch arbitrary files off disk.
+  // Only files the app itself wrote into the allowlisted roots may be served.
+  protocol.handle("local", async (request) => {
+    // Recomputed per request: they depend on userData/temp, not module scope.
+    const filePath = await resolveLocalUrl(request.url, {
+      roots: [
+        path.join(app.getPath("userData"), "image-cache"),
+        path.join(app.getPath("userData"), "Assets"),
+        app.getPath("temp"),
+      ],
+    });
+
+    if (!filePath) {
+      return new Response(null, { status: 403 });
+    }
+
+    return net.fetch(url.pathToFileURL(filePath).toString());
   });
 
   protocol.handle("gradient", (request) => {
