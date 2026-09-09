@@ -2,6 +2,7 @@ import { BrowserWindow, nativeImage } from "electron";
 import capturePagePath from "@resources/linux-game-capture.html?asset";
 
 import { logger } from "./logger";
+import { WindowManager } from "./window-manager";
 import {
   isNearlyUniformScreenshot,
   type ScreenshotColorRange,
@@ -66,6 +67,10 @@ const createCaptureWindow = async (sourceId: string) => {
       sandbox: true,
     },
   });
+
+  // SKIP (self-managed): the hidden capture page is local and driven by
+  // executeJavaScript; the global deny would break frame capture.
+  WindowManager.markSelfManagedNavigation(captureWindow.webContents);
 
   try {
     captureWindow.setSkipTaskbar(true);

@@ -6,6 +6,7 @@ import capturePagePath from "@resources/linux-game-capture.html?asset";
 import { db, levelKeys } from "@main/level";
 import { HydraApi } from "./hydra-api";
 import { logger } from "./logger";
+import { WindowManager } from "./window-manager";
 
 interface CaptureSessionRegistration {
   token: object;
@@ -43,6 +44,10 @@ const createCaptureWindow = async (sourceId: string) => {
       sandbox: true,
     },
   });
+
+  // SKIP (self-managed): the hidden capture page is local and driven by
+  // executeJavaScript; the global deny would break frame capture.
+  WindowManager.markSelfManagedNavigation(captureWindow.webContents);
 
   try {
     captureWindow.setSkipTaskbar(true);

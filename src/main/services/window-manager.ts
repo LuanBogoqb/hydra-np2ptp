@@ -30,6 +30,7 @@ import path from "node:path";
 import UserAgent from "user-agents";
 import { HydraApi } from "./hydra-api";
 import { logger } from "./logger";
+import { originOf } from "@main/helpers/allowed-origin";
 import { isSafeExternalUrl } from "@main/helpers/open-external-safe";
 import {
   addSteamGridDbCacheControl,
@@ -66,6 +67,45 @@ export class WindowManager {
   }
 
   private static readonly editorWindows: Map<string, BrowserWindow> = new Map();
+
+  // Windows whose navigation is owned by their own handlers: the auth popup
+  // resolves hydralauncher:// callbacks and the game-capture windows run
+  // executeJavaScript on a local capture page. The global guard in index.ts
+  // leaves these alone.
+  private static readonly selfManagedNavigation =
+    new WeakSet<Electron.WebContents>();
+
+  // Last committed origin per webContents id. The global guard in index.ts
+  // compares every will-navigate target against it; unknown means deny.
+  private static readonly navigationOrigins = new Map<number, string>();
+
+  public static markSelfManagedNavigation(
+    contents: Electron.WebContents
+  ): void {
+    this.selfManagedNavigation.add(contents);
+  }
+
+  public static isSelfManagedNavigation(
+    contents: Electron.WebContents
+  ): boolean {
+    return this.selfManagedNavigation.has(contents);
+  }
+
+  public static rememberNavigationOrigin(
+    contentsId: number,
+    url: string
+  ): void {
+    const origin = originOf(url);
+    if (origin) this.navigationOrigins.set(contentsId, origin);
+  }
+
+  public static navigationOriginFor(contentsId: number): string {
+    return this.navigationOrigins.get(contentsId) ?? "";
+  }
+
+  public static forgetNavigationOrigin(contentsId: number): void {
+    this.navigationOrigins.delete(contentsId);
+  }
 
   public static get mainWindow(): Electron.BrowserWindow | null {
     return this.mainWindowInstance;
@@ -628,6 +668,10 @@ export class WindowManager {
     contents: Electron.WebContents,
     closeWindow: () => void
   ) {
+    // SKIP (self-managed): only this handler may accept the hydralauncher://
+    // auth callbacks, so the global guard must not deny them.
+    this.markSelfManagedNavigation(contents);
+
     contents.on("will-navigate", (_event, url) => {
       if (url.startsWith("hydralauncher://auth")) {
         closeWindow();

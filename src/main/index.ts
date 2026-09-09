@@ -5,6 +5,7 @@ import {
   net,
   powerMonitor,
   protocol,
+  shell,
 } from "electron";
 import updater from "electron-updater";
 import i18n from "i18next";
@@ -27,6 +28,8 @@ import { np2ptp } from "./services/np2ptp";
 import { db, gamesSublevel, levelKeys } from "./level";
 import { GameShop, UserPreferences } from "@types";
 import { launchGame, openClassicsGame } from "./helpers";
+import { isAllowedOrigin } from "@main/helpers/allowed-origin";
+import { isSafeExternalUrl } from "@main/helpers/open-external-safe";
 import { refreshPortableShortcutLauncher } from "./helpers/shortcut-launch";
 import { lookupCachedPlatform } from "./events/library/get-library";
 import { loadState } from "./main";
@@ -202,6 +205,53 @@ const initializeApp = async () => {
 
 app.on("browser-window-created", (_, window) => {
   optimizer.watchWindowShortcuts(window);
+});
+
+// Global navigation guard. A window that navigates to a foreign origin hands
+// the full preload IPC surface to the new origin, and window.open used to
+// spawn a real child BrowserWindow that inherits the preload. So: navigate
+// only within the origin the window was loaded from, deny every popup, and
+// send safe URLs to the system browser instead. Deny by default.
+app.on("web-contents-created", (_event, contents) => {
+  if (contents.getType() !== "window") return;
+
+  contents.on("did-navigate", (_e, url) => {
+    WindowManager.rememberNavigationOrigin(contents.id, url);
+  });
+
+  contents.once("destroyed", () => {
+    WindowManager.forgetNavigationOrigin(contents.id);
+  });
+
+  contents.on("will-navigate", (event, url) => {
+    // Auth popups and game-capture windows own their navigation (see the
+    // markSelfManagedNavigation call sites); their handlers stay authoritative.
+    if (WindowManager.isSelfManagedNavigation(contents)) return;
+
+    const currentOrigin = WindowManager.navigationOriginFor(contents.id);
+    if (isAllowedOrigin(url, currentOrigin)) return;
+
+    event.preventDefault();
+    logger.warn("Blocked navigation to a foreign origin", {
+      from: currentOrigin || "unknown",
+      to: url,
+    });
+
+    if (isSafeExternalUrl(url)) void shell.openExternal(url);
+  });
+
+  // Applies to every window, including the self-managed ones: popups never
+  // become app windows. The main window installs its own equivalent handler
+  // later, which replaces this one.
+  contents.setWindowOpenHandler(({ url }) => {
+    if (isSafeExternalUrl(url)) {
+      void shell.openExternal(url);
+    } else {
+      logger.warn("Refused to open unsafe external URL:", url);
+    }
+
+    return { action: "deny" };
+  });
 });
 
 app.on("child-process-gone", (_event, details) => {
