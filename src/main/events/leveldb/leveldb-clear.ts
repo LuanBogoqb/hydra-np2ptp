@@ -1,5 +1,5 @@
 import { registerEvent } from "../register-event";
-import { getSublevelByName } from "./helpers";
+import { assertWritable, getSublevelByName } from "./helpers";
 import { logger } from "@main/services";
 
 const leveldbClear = async (
@@ -7,6 +7,7 @@ const leveldbClear = async (
   sublevelName: string
 ) => {
   try {
+    assertWritable("clear", sublevelName);
     const sublevel = getSublevelByName(sublevelName);
     await sublevel.clear();
   } catch (error) {

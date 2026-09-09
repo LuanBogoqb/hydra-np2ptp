@@ -1,6 +1,6 @@
 import { registerEvent } from "../register-event";
 import { db } from "@main/level";
-import { getSublevelByName } from "./helpers";
+import { assertWritable, getSublevelByName } from "./helpers";
 import { logger } from "@main/services";
 
 const leveldbPut = async (
@@ -11,6 +11,7 @@ const leveldbPut = async (
   valueEncoding: "json" | "utf8" = "json"
 ) => {
   try {
+    assertWritable("put", sublevelName || null, key, value);
     if (sublevelName) {
       // Note: sublevels always use "json" encoding, valueEncoding parameter is ignored
       const sublevel = getSublevelByName(sublevelName);
