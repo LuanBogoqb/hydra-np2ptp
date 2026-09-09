@@ -150,18 +150,71 @@ describe("resolveLocalUrl", () => {
   });
 
   it("honours an injected realpath seam", async () => {
-    // The seam may rescue an odd URL into a real inside file.
+    // The seam stands in for the filesystem realpath and is consulted for
+    // both the requested file and the roots: it may rescue an odd URL into a
+    // real inside file, but must leave paths it does not know alone.
+    const virtualPath = path.resolve("virtual/cover.webp");
+    const seam = async (value: string) =>
+      value === virtualPath ? realInsideFile : value;
+
     const rescued = await resolveLocalUrl("local:virtual/cover.webp", {
       roots: [realRootDir],
-      realpath: async () => realInsideFile,
+      realpath: seam,
     });
     assert.strictEqual(rescued, realInsideFile);
 
     // ...and can never move a file across the root boundary.
     const escaped = await resolveLocalUrl(`local:${insideFile}`, {
       roots: [realRootDir],
-      realpath: async () => realOutsideFile,
+      realpath: async (value) =>
+        path.resolve(value) === path.resolve(insideFile)
+          ? realOutsideFile
+          : value,
     });
     assert.strictEqual(escaped, null);
+  });
+
+  it("serves a file named with a leading .. inside a root", async () => {
+    const dottedName = path.join(rootDir, "...cache.webp");
+    fs.writeFileSync(dottedName, "webp");
+    const result = await resolveLocalUrl(`local:${dottedName}`, options);
+    assert.strictEqual(result, await fs.promises.realpath(dottedName));
+  });
+
+  it("accepts a root given with a trailing separator", async () => {
+    const result = await resolveLocalUrl(`local:${insideFile}`, {
+      roots: [realRootDir + path.sep],
+    });
+    assert.strictEqual(result, realInsideFile);
+  });
+
+  itOnWindows("accepts a root given with different casing", async () => {
+    const result = await resolveLocalUrl(`local:${insideFile}`, {
+      roots: [swapCase(realRootDir)],
+    });
+    assert.strictEqual(result, realInsideFile);
+  });
+
+  it("realpaths the roots before containment (8.3/junction relocation)", async () => {
+    // Same divergence the production wiring hits on Windows: the root is
+    // handed out in a form the on-disk name does not match (8.3 short name or
+    // junction-relocated userData), while the file side always realpaths to
+    // the long form. The seam stands in for the OS expansion of both.
+    const shortFormRoot = path.join(tmpBase, "SHORTFO~1", "artwork");
+    const seam = async (value: string) => {
+      if (path.resolve(value) === path.resolve(shortFormRoot)) {
+        return realRootDir;
+      }
+      if (path.resolve(value) === path.resolve(insideFile)) {
+        return realInsideFile;
+      }
+      return value;
+    };
+
+    const result = await resolveLocalUrl(`local:${insideFile}`, {
+      roots: [shortFormRoot],
+      realpath: seam,
+    });
+    assert.strictEqual(result, realInsideFile);
   });
 });

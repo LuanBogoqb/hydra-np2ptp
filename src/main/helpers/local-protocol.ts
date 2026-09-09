@@ -39,12 +39,13 @@ const normalizeForCompare = (value: string): string =>
 
 // Is the real path a file strictly inside `root`? path.relative gives ".."
 // segments (or an absolute path when the two are on different drives) for
-// anything that escapes the root, and "" for the root itself.
+// anything that escapes the root, and "" for the root itself. The escape test
+// is segment-scoped: a file legitimately named "...cache.webp" inside the
+// root must not be read as an escape just because its name starts with "..".
 const isInsideRoot = (realPath: string, root: string): boolean => {
   const relative = path.relative(path.resolve(root), realPath);
-  return (
-    relative !== "" && !path.isAbsolute(relative) && !relative.startsWith("..")
-  );
+  const escapes = relative === ".." || relative.startsWith(".." + path.sep);
+  return relative !== "" && !path.isAbsolute(relative) && !escapes;
 };
 
 export type RealPathFn = (filePath: string) => Promise<string>;
@@ -53,7 +54,8 @@ export interface ResolveLocalUrlOptions {
   // Directory allowlist, computed at call time (they depend on userData).
   roots: readonly string[];
   // Seam for tests; defaults to the real filesystem realpath, which also
-  // collapses symlink/junction escapes before the containment check.
+  // collapses symlink/junction escapes before the containment check. Used for
+  // both the requested file and the roots.
   realpath?: RealPathFn;
 }
 
@@ -66,18 +68,32 @@ export async function resolveLocalUrl(
   const resolvedPath = parseRequestPath(url);
   if (!resolvedPath) return null;
 
+  const realpath = options.realpath ?? fs.promises.realpath;
+
   let realPath: string;
   try {
-    realPath = await (options.realpath ?? fs.promises.realpath)(resolvedPath);
+    realPath = await realpath(resolvedPath);
   } catch {
     // Missing file, broken link, permission error: nothing to serve.
     return null;
   }
 
+  // Roots go through the same realpath as the file side, or the containment
+  // check compares two names for the same directory: app.getPath("temp") can
+  // hand out the 8.3 short form (C:\Users\LUANBO~1\...) while realpath of a
+  // file inside it returns the long form, and a junction-relocated userData
+  // does the same. A root that does not exist yet keeps its literal path —
+  // no file inside it can be real anyway.
+  const realRoots = await Promise.all(
+    options.roots.map((root) =>
+      realpath(path.resolve(root)).catch(() => path.resolve(root))
+    )
+  );
+
   const realForCompare = normalizeForCompare(realPath);
 
-  for (const root of options.roots) {
-    if (isInsideRoot(realForCompare, normalizeForCompare(path.resolve(root)))) {
+  for (const realRoot of realRoots) {
+    if (isInsideRoot(realForCompare, normalizeForCompare(realRoot))) {
       return realPath;
     }
   }
