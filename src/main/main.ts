@@ -40,6 +40,7 @@ import { migrateNp2ptpDownloaderId } from "./helpers/migrate-np2ptp-downloader-i
 import { getDirSize } from "./services/download/helpers";
 import { GofileApi } from "./services/hosters";
 import { clearLegacyAchievementPersistence } from "./level/clear-legacy-achievements";
+import { normalizeLegacyGameRecords } from "./level/normalize-legacy-game-records";
 
 const hasMissingSeedFiles = async (download: Download): Promise<boolean> => {
   if (!download.folderName) return false;
@@ -68,6 +69,13 @@ export const loadState = async () => {
   await clearLegacyAchievementPersistence();
   await migrateCloudSaveAutomaticSyncDefaults();
   await migrateNp2ptpDownloaderId();
+
+  const { ran, touched } = await normalizeLegacyGameRecords();
+  if (ran) {
+    logger.info(
+      `Dropped legacy fields from ${touched} games record(s) to match the renderer write policy`
+    );
+  }
 
   const userPreferences = await db.get<string, UserPreferences | null>(
     levelKeys.userPreferences,

@@ -212,6 +212,10 @@ describe("assertWritable", () => {
       false,
     ],
     ["unknown sublevel put", "put", "madeUpSublevel", "k", {}, false],
+    // prototype names must never resolve to a policy entry
+    ["__proto__ sublevel put", "put", "__proto__", "k", {}, false],
+    ["constructor sublevel put", "put", "constructor", "k", {}, false],
+    ["valueOf sublevel clear", "clear", "valueOf", undefined, undefined, false],
     // path-ish names are refused before any policy lookup
     ["path traversal name", "put", "../x", "k", {}, false],
     ["name with a space", "clear", "a b", undefined, undefined, false],

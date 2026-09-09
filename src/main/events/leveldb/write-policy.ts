@@ -5,6 +5,7 @@
 //
 // This module must stay free of @main/level and electron imports so the
 // colocated test can load it without touching the real database.
+import type { Game } from "@types";
 
 export type LeveldbWriteOp = "put" | "del" | "clear";
 
@@ -93,6 +94,21 @@ export const GAME_RECORD_FIELDS = [
   "romSizeBytes",
 ] as const;
 
+// Compile-time tripwire: every field of the Game interface must be on the
+// allowlist above, otherwise this resolves to the offending field names and
+// the const below stops being assignable. A field added upstream becomes a
+// typecheck error instead of a silent renderer refusal at runtime.
+export type MissingGameField = Exclude<
+  keyof Game,
+  (typeof GAME_RECORD_FIELDS)[number]
+>;
+
+export const gameRecordFieldsCoverGameInterface: [MissingGameField] extends [
+  never,
+]
+  ? true
+  : never = true;
+
 // themes: theme import/add/delete/delete-all (import-theme-modal.tsx:49,
 // add-theme-modal.tsx:94, delete-theme-modal.tsx:32,
 // delete-all-themes-modal.tsx:31) — any key.
@@ -139,10 +155,14 @@ export const assertWritable = (
     );
   }
 
+  // Object.hasOwn, not truthiness: names like __proto__ or constructor must
+  // never resolve to an inherited (non-policy) value.
   const policy =
     sublevelName == null
       ? WRITER_POLICY.root
-      : WRITER_POLICY.sublevels[sublevelName];
+      : Object.hasOwn(WRITER_POLICY.sublevels, sublevelName)
+        ? WRITER_POLICY.sublevels[sublevelName]
+        : undefined;
 
   if (!policy) {
     return refused(
