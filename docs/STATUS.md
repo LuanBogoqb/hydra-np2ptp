@@ -42,11 +42,14 @@ written as 14 by an official Hydra build is left alone.
 ## Dev environment (Windows)
 
 - `.env` at the repo root — 6 keys, including `MAIN_VITE_NIMBUS_API_URL`, which
-  `.env.example` does not list. It lives on the E: drive and survived the
-  2026-08-21 C: reinstall.
-- `yarn` comes from corepack; `~/bin/yarn.cmd` forwards to it and is on the user
-  PATH. Husky's pre-commit hook runs `yarn run format`, so commits fail without
-  it.
+  `.env.example` does not list. It survived the 2026-08-21 C: reinstall on the
+  then-E: drive, and the 2026-10-05 reinstall (which reshuffled drive letters:
+  the repo now lives on D:).
+- `yarn` comes from corepack. After the 2026-10-05 C: reinstall the old
+  `~/bin/yarn.cmd` forwarder is gone and `yarn` is not on PATH (corepack itself
+  still resolves, via `C:\Program Files\nodejs\corepack`). Husky's pre-commit
+  hook runs `yarn run format`, so commits fail until yarn is re-exposed on the
+  PATH.
 - `.venv312` — Python 3.12.10, libtorrent 2.1.1.0, cx_Freeze 7.2.3
   (`python -m venv .venv312 && .venv312/Scripts/pip install -r requirements.txt`).
 - Start the app with `node scripts/dev-np2ptp.mjs`, which points

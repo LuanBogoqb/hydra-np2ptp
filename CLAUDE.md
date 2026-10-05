@@ -4,7 +4,7 @@ This repo is a fork of `hydralauncher/hydra` (Electron + React + TypeScript, wit
 sidecar for libtorrent and a Rust native addon). The fork adds `np2ptp`, a custom Rust P2P
 protocol, as an alternative download/seed/torrent transport alongside Hydra's existing
 BitTorrent and direct-download paths. The np2ptp protocol itself lives in a separate repo,
-`E:\Repos\np2ptp-project\np2ptp` (its own `CLAUDE.md`); this repo only embeds and drives the
+`D:\Repos\np2ptp-project\np2ptp` (its own `CLAUDE.md`); this repo only embeds and drives the
 `np2ptp` binary, it does not implement the protocol.
 
 ## Fork discipline

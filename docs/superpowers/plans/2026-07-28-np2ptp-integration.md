@@ -658,7 +658,7 @@ git commit -m "feat: np2ptp daemon exponential-backoff restart and re-provide ho
   export const np2ptp: Np2ptpDaemon; // singleton, prod spawnFn
   export async function reprovideAllFromDb(): Promise<void>;
   ```
-- Resolution order: `process.env.NP2PTP_BIN` if set → packaged: `path.join(process.resourcesPath, "np2ptp", "np2ptp.exe" | "np2ptp")` → dev fallback: `E:\Repos\np2ptp\target\release\np2ptp.exe` is NOT hardcoded; instead dev requires `NP2PTP_BIN` and index.ts logs a clear warn + daemon stays unavailable if missing (graceful: Hydra works, np2ptp features error with toast).
+- Resolution order: `process.env.NP2PTP_BIN` if set → packaged: `path.join(process.resourcesPath, "np2ptp", "np2ptp.exe" | "np2ptp")` → dev fallback: `D:\Repos\np2ptp-project\np2ptp\target\release\np2ptp.exe` is NOT hardcoded; instead dev requires `NP2PTP_BIN` and index.ts logs a clear warn + daemon stays unavailable if missing (graceful: Hydra works, np2ptp features error with toast).
 - Spawn args: `[ "daemon", "--store", path.join(SystemPath.getPath("userData"), "np2ptp") ]`, `stdio: ["pipe","pipe","pipe"]`, `windowsHide: true`, env passthrough (`NP2PTP_RELAY`/`NP2PTP_TRACKER` ride along).
 - `reprovideAllFromDb()`: iterate `downloadsSublevel`, for every record with `np2ptpSeed === true && nptpPath` → `np2ptp.request({cmd:"provide", nptp: record.nptpPath})`, errors → logger.warn (never throw). Passed as `onRestart`. Also called once at boot after first `ensureReady()`.
 - `onCrash` → `WindowManager.sendToAppWindows("on-np2ptp-crashed")` (add channel in Task 8 UI wiring; here just the send).
@@ -949,7 +949,7 @@ Expected: clean
 
 Run: `set NP2PTP_BIN=<path-to>np2ptp.exe && corepack yarn dev`
 Checklist: app boots with daemon ready (log line); settings shows both toggles; a converted game shows copy-link; seed toggle flips without error; killing np2ptp.exe in Task Manager → app recovers (backoff) and re-provides.
-If no np2ptp.exe is built locally: `cd E:\Repos\np2ptp && cargo build --release -p np2ptp-node`.
+If no np2ptp.exe is built locally: `cd D:\Repos\np2ptp-project\np2ptp && cargo build --release -p np2ptp-node`.
 
 - [ ] **Step 4: Commit**
 
