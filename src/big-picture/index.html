@@ -6,7 +6,7 @@
     <title>Hydra Big Picture</title>
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self' 'unsafe-inline' * data: local: blob:; media-src 'self' 'unsafe-inline' * data: local: blob:;"
+      content="default-src 'self' local: blob:; script-src 'self' local: 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' local: data: blob: https:; media-src 'self' local: blob: data:; connect-src 'self' local: https: wss:; font-src 'self' data:; object-src 'none'"
     />
   </head>
   <body>

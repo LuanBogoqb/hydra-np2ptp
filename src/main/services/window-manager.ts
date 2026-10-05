@@ -22,6 +22,7 @@ import {
   nativeImage,
   nativeTheme,
   screen,
+  session,
   shell,
 } from "electron";
 import { t } from "i18next";
@@ -31,6 +32,10 @@ import UserAgent from "user-agents";
 import { HydraApi } from "./hydra-api";
 import { logger } from "./logger";
 import { originOf } from "@main/helpers/allowed-origin";
+import {
+  CONTENT_SECURITY_POLICY,
+  isRendererOrigin,
+} from "@main/helpers/csp";
 import { isSafeExternalUrl } from "@main/helpers/open-external-safe";
 import {
   addSteamGridDbCacheControl,
@@ -64,6 +69,141 @@ export class WindowManager {
         !window.isDestroyed() &&
         window.webContents.id === webContentsId
     );
+  }
+
+  // Hosts the renderer reads pixels from (big picture dominant color and hero
+  // blends) — the only cross-origin responses that still need CORS headers.
+  private static readonly CANVAS_ARTWORK_HOST_SUFFIXES = [
+    "steamgriddb.com",
+    "steamstatic.com",
+  ];
+
+  private static isCanvasArtworkRequest(details: {
+    method: string;
+    url: string;
+  }): boolean {
+    const method = details.method.toUpperCase();
+    if (method !== "GET" && method !== "OPTIONS") return false;
+
+    try {
+      const { hostname } = new URL(details.url);
+      return this.CANVAS_ARTWORK_HOST_SUFFIXES.some(
+        (suffix) => hostname === suffix || hostname.endsWith(`.${suffix}`)
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  // Only our own renderer origin may read those responses, so it is echoed
+  // back instead of "*". Documents loaded from local files have an opaque
+  // origin, which the fetch spec serializes as "null".
+  private static canvasArtworkCorsHeaders(): Record<string, string[]> {
+    return {
+      "access-control-allow-origin": [this.rendererOrigin() || "null"],
+      "access-control-allow-methods": ["GET, OPTIONS"],
+      "access-control-expose-headers": ["ETag"],
+      "access-control-allow-headers": [
+        "Content-Type, X-Requested-With, If-None-Match",
+      ],
+    };
+  }
+
+  private static sessionHooksInstalled = false;
+
+  // Electron allows a single webRequest listener per event and session, so the
+  // CSP injection and the artwork CORS unblocking have to share one
+  // onHeadersReceived. Both live on the default session (the one every app
+  // window uses) and are installed once, from the first main window creation.
+  private static installSessionWebRequestHooks(): void {
+    if (this.sessionHooksInstalled) return;
+    this.sessionHooksInstalled = true;
+
+    const webRequest = session.defaultSession.webRequest;
+
+    webRequest.onBeforeSendHeaders((details, callback) => {
+      if (
+        !this.isArtworkRendererRequest(details.webContentsId) ||
+        details.url.includes("chatwoot")
+      ) {
+        return callback(details);
+      }
+
+      if (details.url.includes("workwonders")) {
+        return callback({
+          ...details,
+          requestHeaders: {
+            Origin: "https://workwonders.app",
+            ...details.requestHeaders,
+          },
+        });
+      }
+
+      const userAgent = new UserAgent();
+
+      callback({
+        requestHeaders: {
+          ...details.requestHeaders,
+          "user-agent": userAgent.toString(),
+        },
+      });
+    });
+
+    webRequest.onHeadersReceived((details, callback) => {
+      const isArtworkRendererRequest = this.isArtworkRendererRequest(
+        details.webContentsId
+      );
+      const responseHeaders =
+        isArtworkRendererRequest && isSteamGridDbArtworkRequest(details)
+          ? addSteamGridDbCacheControl(details.responseHeaders)
+          : details.responseHeaders;
+
+      // The remote renderer document never sees the local <meta> policy, so
+      // the same policy rides in as a response header. HYDRA_NO_CSP=1 is the
+      // escape hatch for a bad policy shipped in a prerelease.
+      if (
+        process.env.HYDRA_NO_CSP !== "1" &&
+        details.resourceType === "mainFrame" &&
+        isRendererOrigin(details.url, this.rendererOrigin())
+      ) {
+        return callback({
+          ...details,
+          responseHeaders: {
+            ...responseHeaders,
+            "Content-Security-Policy": [
+              ...(responseHeaders?.["Content-Security-Policy"] ?? []),
+              CONTENT_SECURITY_POLICY,
+            ],
+          },
+        });
+      }
+
+      // CORS is only unblocked for the canvas artwork hosts; every other
+      // response passes through as the server sent it.
+      if (!isArtworkRendererRequest || !this.isCanvasArtworkRequest(details)) {
+        return callback({ ...details, responseHeaders });
+      }
+
+      const headers = this.canvasArtworkCorsHeaders();
+
+      if (details.method.toUpperCase() === "OPTIONS") {
+        return callback({
+          cancel: false,
+          responseHeaders: {
+            ...responseHeaders,
+            ...headers,
+          },
+          statusLine: "HTTP/1.1 200 OK",
+        });
+      }
+
+      return callback({
+        responseHeaders: {
+          ...responseHeaders,
+          ...headers,
+        },
+      });
+    });
   }
 
   private static readonly editorWindows: Map<string, BrowserWindow> = new Map();
@@ -159,6 +299,21 @@ export class WindowManager {
     return version.replaceAll(".", "-");
   }
 
+  // Origin the renderer documents are served from: the dev server, or the
+  // remote release host in production. Empty when windows load local files —
+  // those carry their own <meta> policy, so there is nothing to match against.
+  private static rendererOrigin(): string {
+    if (is.dev && process.env["ELECTRON_RENDERER_URL"]) {
+      return originOf(process.env["ELECTRON_RENDERER_URL"]);
+    }
+
+    if (import.meta.env.MAIN_VITE_LAUNCHER_SUBDOMAIN) {
+      return `https://release-v${this.formatVersionNumber(app.getVersion())}.${import.meta.env.MAIN_VITE_LAUNCHER_SUBDOMAIN}`;
+    }
+
+    return "";
+  }
+
   public static async loadWindowURL(window: BrowserWindow, hash: string = "") {
     // HMR for renderer base on electron-vite cli.
     // Load the remote URL for development or the local html file for production.
@@ -167,9 +322,7 @@ export class WindowManager {
     } else if (import.meta.env.MAIN_VITE_LAUNCHER_SUBDOMAIN) {
       // Try to load from remote URL in production
       try {
-        await window.loadURL(
-          `https://release-v${this.formatVersionNumber(app.getVersion())}.${import.meta.env.MAIN_VITE_LAUNCHER_SUBDOMAIN}#/${hash}`
-        );
+        await window.loadURL(`${this.rendererOrigin()}#/${hash}`);
       } catch (error) {
         // Fall back to local file if remote URL fails
         logger.error(
@@ -344,82 +497,7 @@ export class WindowManager {
       mainWindow.maximize();
     }
 
-    mainWindow.webContents.session.webRequest.onBeforeSendHeaders(
-      (details, callback) => {
-        if (
-          !this.isArtworkRendererRequest(details.webContentsId) ||
-          details.url.includes("chatwoot")
-        ) {
-          return callback(details);
-        }
-
-        if (details.url.includes("workwonders")) {
-          return callback({
-            ...details,
-            requestHeaders: {
-              Origin: "https://workwonders.app",
-              ...details.requestHeaders,
-            },
-          });
-        }
-
-        const userAgent = new UserAgent();
-
-        callback({
-          requestHeaders: {
-            ...details.requestHeaders,
-            "user-agent": userAgent.toString(),
-          },
-        });
-      }
-    );
-
-    mainWindow.webContents.session.webRequest.onHeadersReceived(
-      (details, callback) => {
-        const isArtworkRendererRequest = this.isArtworkRendererRequest(
-          details.webContentsId
-        );
-        const responseHeaders =
-          isArtworkRendererRequest && isSteamGridDbArtworkRequest(details)
-            ? addSteamGridDbCacheControl(details.responseHeaders)
-            : details.responseHeaders;
-
-        if (
-          !isArtworkRendererRequest ||
-          details.url.includes("featurebase") ||
-          details.url.includes("chatwoot") ||
-          details.url.includes("workwonders")
-        ) {
-          return callback({ ...details, responseHeaders });
-        }
-
-        const headers = {
-          "access-control-allow-origin": ["*"],
-          "access-control-allow-methods": ["GET, POST, PUT, DELETE, OPTIONS"],
-          "access-control-expose-headers": ["ETag"],
-          "access-control-allow-headers": [
-            "Content-Type, Authorization, X-Requested-With, If-None-Match",
-          ],
-        };
-        if (details.method === "OPTIONS") {
-          return callback({
-            cancel: false,
-            responseHeaders: {
-              ...responseHeaders,
-              ...headers,
-            },
-            statusLine: "HTTP/1.1 200 OK",
-          });
-        }
-
-        return callback({
-          responseHeaders: {
-            ...responseHeaders,
-            ...headers,
-          },
-        });
-      }
-    );
+    this.installSessionWebRequestHooks();
 
     const initialHash = userPreferences?.launchToLibraryPage ? "library" : "";
 
